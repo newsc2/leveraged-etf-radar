@@ -1,0 +1,18 @@
+{
+  "_source": "Kelly Letter Note 19, emailed 2026-05-10 (data as of 2026-05-08)",
+  "_last_updated": "2026-05-11",
+  "_note": "Refresh weekly when a new Kelly note arrives. Used by the dashboard's 9Sig panel to seed the engine with Kelly's latest published shares + prior_goal.",
+
+  "last_rebalance_date": "2026-04-06",
+  "next_action_date": "2026-06-29",
+  "prior_goal": 5824994,
+  "last_quarter_close_price": 43.33,
+  "last_rebalance_fill_price": 44.03,
+  "rolling_2yr_quarterly_high": 52.72,
+  "high_set_on": "2025-12-31",
+  "thirty_down_active": false,
+  "thirty_down_started": null,
+  "shares_stock": 133842,
+  "shares_bond": 12425,
+  "spike_reset_trigger_price": 88.06
+}

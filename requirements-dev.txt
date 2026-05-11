@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest>=7.0
+mypy>=1.5
+ruff>=0.1
+pandas-stubs
+types-requests
+types-PyYAML
