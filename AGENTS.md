@@ -140,7 +140,7 @@ rsync -az --delete \
 **Notes:**
 - `--no-summary` keeps cron runs fast (~30s) and skips Gemini calls. Enable in cron if you want hourly LLM summaries — currently the summary updates only when you run `export_static.py --upload` manually from MBP.
 - macOS cron runs in system TZ (`America/New_York`) so hours above are ET; DST handled by the OS.
-- Holiday handling: not implemented. The 14 runs still fire on NYSE holidays but produce a stale-ish refresh (no new prices) — cheap to ignore.
+- **NYSE holidays:** the wrapper hard-codes 2026 + 2027 full-day NYSE closings and exits early on those dates (logs a one-line skip notice). Refresh the list when 2028 dates are needed; missing entries just cause one wasted refresh, never breakage.
 
 ## How we coordinate (Claude ↔ Codex)
 - **`AGENTS.md`** (this file) is the shared brief. Both agents read & maintain it. Keep it terse.
