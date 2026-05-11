@@ -440,6 +440,7 @@ def build_panel_html(
     update_str = update_label or "from last published Kelly note"
     now_et = _datetime.now(ZoneInfo("America/New_York"))
     updated_stamp = now_et.strftime("%b %-d, %Y · %-I:%M %p ET")
+    built_iso = now_et.isoformat()  # machine-readable, includes -04:00 / -05:00
 
     return f"""
 <div class="ninesig-panel">
@@ -449,7 +450,11 @@ def build_panel_html(
       <p class="ninesig-meta">
         TQQQ + AGG quarterly rebalance · last action {last_rebal} ·
         next action {next_rebal} · {update_str}
-        <span class="ninesig-updated">· updated {updated_stamp}</span>
+        <span class="ninesig-updated" data-built="{built_iso}">
+          · <span class="ninesig-status-dot ninesig-status-idle"
+                   title="Built {built_iso}"></span>
+          updated {updated_stamp}<span class="ninesig-status-age"></span>
+        </span>
       </p>
     </div>
     <div class="ninesig-verdict ninesig-verdict-{verdict_kind}">
@@ -525,6 +530,54 @@ def build_panel_html(
     </div>
   </div>
 </div>
+<script>
+(function () {{
+  var wrap = document.querySelector('.ninesig-panel .ninesig-updated[data-built]');
+  if (!wrap) return;
+  var dot = wrap.querySelector('.ninesig-status-dot');
+  var ageEl = wrap.querySelector('.ninesig-status-age');
+  var builtMs = Date.parse(wrap.dataset.built);
+  if (isNaN(builtMs)) return;
+
+  function update() {{
+    var now = new Date();
+    var ageMin = Math.max(0, Math.floor((now - builtMs) / 60000));
+
+    var fmt = new Intl.DateTimeFormat('en-US', {{
+      timeZone: 'America/New_York',
+      weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false,
+    }});
+    var parts = {{}};
+    fmt.formatToParts(now).forEach(function (p) {{ parts[p.type] = p.value; }});
+    var dows = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var dow = dows.indexOf(parts.weekday);
+    var hour = parseInt(parts.hour, 10);
+    var minute = parseInt(parts.minute, 10);
+    var marketOpen = (dow >= 1 && dow <= 5) &&
+      ((hour > 9) || (hour === 9 && minute >= 30)) && (hour < 16);
+
+    var status, suffix;
+    if (!marketOpen) {{
+      status = 'idle';
+      suffix = '';
+    }} else if (ageMin < 35) {{
+      status = 'fresh';
+      suffix = ' (' + ageMin + 'm ago)';
+    }} else if (ageMin < 120) {{
+      status = 'stale';
+      suffix = ' (' + ageMin + 'm ago — stale)';
+    }} else {{
+      status = 'dead';
+      suffix = ' (' + ageMin + 'm ago — refresh failing?)';
+    }}
+    dot.className = 'ninesig-status-dot ninesig-status-' + status;
+    ageEl.textContent = suffix;
+  }}
+
+  update();
+  setInterval(update, 30000);
+}})();
+</script>
 """
 
 

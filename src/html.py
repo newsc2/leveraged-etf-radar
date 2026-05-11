@@ -370,6 +370,16 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     .ninesig-updated {{
       color: {text_muted}; opacity: 0.75; white-space: nowrap;
     }}
+    .ninesig-status-dot {{
+      display: inline-block; width: 7px; height: 7px;
+      border-radius: 50%; vertical-align: 1px; margin: 0 2px 0 1px;
+      background: {text_muted};
+    }}
+    .ninesig-status-fresh {{ background: {green}; }}
+    .ninesig-status-stale {{ background: #f59e0b; }}
+    .ninesig-status-dead  {{ background: {red}; }}
+    .ninesig-status-idle  {{ background: {text_muted}; }}
+    .ninesig-status-age {{ color: {text_muted}; }}
     .ninesig-verdict {{
       padding: 10px 14px; border-radius: 2px; min-width: 280px;
       background: {panel_bg}; border-left: 3px solid {text_muted};
