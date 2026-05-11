@@ -93,10 +93,27 @@ If a parser fails, downgrade confidence; never fabricate holdings.
 
 ---
 
-## Reference: Jason Kelly 9Sig
+## Jason Kelly 9Sig — engine + dashboard panel
 `docs/jason-kelly/` contains offline notes on Kelly's 3Sig/6Sig/**9Sig** quarterly-rebalance plans (TQQQ + AGG, 9% target, 60/40 base, with 30-Down / spike-reset / buying-power-throttle override rules). Tony loosely follows 9Sig.
 
-`src/sig_plans.py` is a pure-function engine implementing all four override rules. Run `python -m src.sig_plans` for a live what-if against the latest published Kelly state. Tests in `tests/test_sig_plans.py` (9 cases, each maps to a real historical scenario from `docs/jason-kelly/9sig-history.md`). Spike-reset rule has an interpretation ambiguity in Kelly's user guide — see comment in `compute_rebalance()`. Not yet wired into the dashboard HTML; that's a follow-up.
+**Modules:**
+- `src/sig_plans.py` — pure-function engine, all four override rules. Run `python -m src.sig_plans` for live what-if. Tests in `tests/test_sig_plans.py` (9 cases mapping to real historical scenarios).
+- `src/sig_plan_charts.py` — Plotly charts (`build_allocation_chart`, `build_dollar_balance_chart`) + `build_panel_html()` for the dashboard panel.
+- `src/sig_lens.py` — Codex's earlier read-only analytical lens (signal/gap calc, no orders). Complementary, not duplicative.
+
+**State files:**
+- `data/sig_plans/9sig_quarterly_history.json` — 38 quarters of post-rebalance balances (verified against Kelly's published page to the dollar).
+- `data/sig_plans/9sig_current_state.json` — latest Kelly snapshot (shares, prior_goal, last fill price, 30-Down state). Refresh weekly when Kelly's Sunday note arrives.
+
+**Dashboard panel:** A 9Sig table + KPI strip injected near the top of the dashboard (between intro-block and filter-bar). Auto-builds on every `python export_static.py` run using live TQQQ + AGG closes from Yahoo Finance. Verified against Kelly Note 19 (2026-05-10) to the dollar.
+
+**Known nuances** (kept the engine simple by design):
+- 30-Down threshold check fires at exactly 30.0% drawdown; Kelly tolerates the boundary (his strict `> 30%` semantics or excluding very recent quarters).
+- `next_goal()` formula uses `prior_goal × 1.09 + 0.5 × dividends`, which matches Kelly for normal sell quarters. Skip/throttle/base-reset quarters use catch-up rules (post-rebal actual × 1.09); engine sidesteps by re-seeding `prior_goal` from each new Kelly note.
+- Spike-reset baseline is the **rebalance fill price** (not Q-1 close). Stored in `PlanState.last_rebalance_fill_price`.
+
+**TQQQ split history** (Yahoo applies retroactively, breaks naive comparisons):
+- 3:1 on 5/24/2018, 2:1 on ~1/13/2022, **2:1 in Q4 2025** (between 9/29/25 and 1/5/26 — discovered via share count doubling).
 
 ## How we coordinate (Claude ↔ Codex)
 - **`AGENTS.md`** (this file) is the shared brief. Both agents read & maintain it. Keep it terse.
