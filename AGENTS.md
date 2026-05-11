@@ -115,6 +115,33 @@ If a parser fails, downgrade confidence; never fabricate holdings.
 **TQQQ split history** (Yahoo applies retroactively, breaks naive comparisons):
 - 3:1 on 5/24/2018, 2:1 on ~1/13/2022, **2:1 in Q4 2025** (between 9/29/25 and 1/5/26 — discovered via share count doubling).
 
+## Auto-refresh on Mac Mini
+A copy of the project lives on the Mac Mini (`macmini:Projects/leveraged-etf-radar`, mirrored via rsync from MBP). The Mac Mini owns the publish cadence — the MBP is for development.
+
+**Wrapper:** `scripts/refresh-dashboard.sh` — sets a sane PATH, sources `~/.zshenv` for API keys, runs `export_static.py --upload --no-summary`, logs to `logs/dashboard-refresh.log`.
+
+**Cron:** weekdays only, ET market hours, every 30 min plus market-close print:
+```
+30 9 * * 1-5    /Users/newsc2/Projects/leveraged-etf-radar/scripts/refresh-dashboard.sh
+0,30 10-15 * * 1-5  /Users/newsc2/Projects/leveraged-etf-radar/scripts/refresh-dashboard.sh
+0 16 * * 1-5    /Users/newsc2/Projects/leveraged-etf-radar/scripts/refresh-dashboard.sh
+```
+That's 14 runs/day: 9:30, 10:00, 10:30, …, 15:30, 16:00 ET. The 9Sig timestamp in the panel header shows the actual ET run time.
+
+**To re-sync MBP → Mac Mini after a code change:**
+```bash
+rsync -az --delete \
+  --exclude=.venv --exclude=cache --exclude=dist --exclude=__pycache__ \
+  --exclude=.mypy_cache --exclude=.pytest_cache --exclude=.ruff_cache \
+  --exclude=.DS_Store --exclude=logs \
+  ./ macmini:Projects/leveraged-etf-radar/
+```
+
+**Notes:**
+- `--no-summary` keeps cron runs fast (~30s) and skips Gemini calls. Enable in cron if you want hourly LLM summaries — currently the summary updates only when you run `export_static.py --upload` manually from MBP.
+- macOS cron runs in system TZ (`America/New_York`) so hours above are ET; DST handled by the OS.
+- Holiday handling: not implemented. The 14 runs still fire on NYSE holidays but produce a stale-ish refresh (no new prices) — cheap to ignore.
+
 ## How we coordinate (Claude ↔ Codex)
 - **`AGENTS.md`** (this file) is the shared brief. Both agents read & maintain it. Keep it terse.
 - **`CLAUDE.md`** is Claude's private scratch. Codex doesn't touch it.
