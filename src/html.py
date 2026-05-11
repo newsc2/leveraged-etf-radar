@@ -246,8 +246,8 @@ def build_filter_bar(total: int) -> str:
       <div class="filter-bar">
         <div class="filter-group" data-group="direction">
           <span class="filter-label">Direction</span>
-          <button class="filter-btn active" data-filter="*">All</button>
-          <button class="filter-btn" data-filter=".dir-long">Long</button>
+          <button class="filter-btn" data-filter="*">All</button>
+          <button class="filter-btn active" data-filter=".dir-long">Long</button>
           <button class="filter-btn" data-filter=".dir-inverse">Inverse</button>
         </div>
         <div class="filter-group" data-group="leverage">
@@ -1134,7 +1134,10 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     // Filter state
     // -----------------------------------------------------------
     const filterState = new Map();
-    document.querySelectorAll('.filter-group').forEach(g => filterState.set(g.dataset.group, '*'));
+    document.querySelectorAll('.filter-group').forEach(g => {{
+      const active = g.querySelector('.filter-btn.active');
+      filterState.set(g.dataset.group, active ? active.dataset.filter : '*');
+    }});
 
     function tickerMatches(ticker) {{
       const cls = (RADAR.funds[ticker] && RADAR.funds[ticker].classes) || '';
