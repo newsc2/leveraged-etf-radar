@@ -343,6 +343,8 @@ def build_panel_html(
     (panel will reflect last-rebalance snapshot rather than live state).
     """
     from datetime import date as _date
+    from datetime import datetime as _datetime
+    from zoneinfo import ZoneInfo
 
     from src.sig_plans import (
         PlanConfig,
@@ -436,6 +438,8 @@ def build_panel_html(
     last_rebal = state.last_rebalance_date.strftime("%b %-d, %Y")
     next_rebal = next_action.strftime("%b %-d, %Y")
     update_str = update_label or "from last published Kelly note"
+    now_et = _datetime.now(ZoneInfo("America/New_York"))
+    updated_stamp = now_et.strftime("%b %-d, %Y · %-I:%M %p ET")
 
     return f"""
 <div class="ninesig-panel">
@@ -444,7 +448,8 @@ def build_panel_html(
       <h2 class="ninesig-title">9Sig — Jason Kelly's leveraged NDX plan</h2>
       <p class="ninesig-meta">
         TQQQ + AGG quarterly rebalance · last action {last_rebal} ·
-        next action {next_rebal} · state {update_str}
+        next action {next_rebal} · {update_str}
+        <span class="ninesig-updated">· updated {updated_stamp}</span>
       </p>
     </div>
     <div class="ninesig-verdict ninesig-verdict-{verdict_kind}">

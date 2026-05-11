@@ -367,6 +367,9 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     .ninesig-meta {{
       font-size: 12px; color: {text_muted}; margin: 0;
     }}
+    .ninesig-updated {{
+      color: {text_muted}; opacity: 0.75; white-space: nowrap;
+    }}
     .ninesig-verdict {{
       padding: 10px 14px; border-radius: 2px; min-width: 280px;
       background: {panel_bg}; border-left: 3px solid {text_muted};
