@@ -55,6 +55,15 @@ done
   echo
   echo "=== $(date '+%Y-%m-%d %H:%M:%S %Z') — refresh start ==="
   cd "${PROJECT_DIR}"
+
+  # Pull latest before building. This is what eliminates the race where
+  # an MBP commit + push could be clobbered by a Mac Mini cron build of
+  # the previous SHA. If the pull fails (offline, GitHub hiccup), we
+  # log it and continue with whatever code is already checked out.
+  if ! git pull --quiet origin main; then
+    echo "WARNING: git pull failed; building with HEAD=$(git rev-parse --short HEAD)"
+  fi
+
   "${PYTHON}" export_static.py --upload --no-summary
   echo "=== $(date '+%Y-%m-%d %H:%M:%S %Z') — refresh done ==="
 } >> "${LOG_FILE}" 2>&1
