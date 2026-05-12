@@ -76,6 +76,42 @@ def _fmt_price(v: float | None) -> str:
     return f"${v:.2f}"
 
 
+_PRICE_EPOCH = pd.Timestamp("2016-01-01")
+
+
+def _decimate_series(series: "pd.Series | None") -> dict[str, Any] | None:
+    """Compact 10y price history for the row-expand mini chart.
+
+    Layout: daily for the last 1Y, weekly for 1Y-5Y, monthly for older.
+    Total ~520 points per fund; encoded as parallel arrays of (day-offset
+    from 2016-01-01, price rounded to 4 dp). Roughly 5KB per fund in JSON.
+    """
+    if series is None or series.empty:
+        return None
+    end = series.index.max()
+    one_year_ago = end - pd.Timedelta(days=365)
+    five_years_ago = end - pd.Timedelta(days=5 * 365)
+
+    daily_part = series[series.index >= one_year_ago]
+    weekly_part = series[(series.index >= five_years_ago) & (series.index < one_year_ago)]
+    monthly_part = series[series.index < five_years_ago]
+
+    weekly_resampled = (
+        weekly_part.resample("W-FRI").last().dropna() if not weekly_part.empty else weekly_part
+    )
+    monthly_resampled = (
+        monthly_part.resample("ME").last().dropna() if not monthly_part.empty else monthly_part
+    )
+
+    combined = pd.concat([monthly_resampled, weekly_resampled, daily_part]).sort_index()
+    if combined.empty:
+        return None
+
+    days = [int((d - _PRICE_EPOCH).days) for d in combined.index]
+    prices = [round(float(v), 4) for v in combined.values]
+    return {"e": "2016-01-01", "d": days, "p": prices}
+
+
 def build_screener_table(funds: list[Fund], metrics: dict[str, FundMetrics]) -> str:
     rows_html: list[str] = []
     for f in sorted(funds, key=lambda f: f.ticker):
@@ -210,6 +246,7 @@ def build_radar_json(
             "naive": m.naive_leverage_return_1y, "sim": m.simulated_daily_reset_1y,
             "addv": m.avg_daily_dollar_volume,
             "price": m.latest_close,
+            "hist": _decimate_series(fund_data.get(tk)),
         }
 
     # ── Holdings (compact) for the click-to-expand panel ──
@@ -538,6 +575,21 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     }}
     .section-desc strong {{ color: {text}; }}
     .section-anchor {{ scroll-margin-top: 72px; }}
+
+    /* Mini price chart in detail panel */
+    .mini-chart-block {{ margin-top: 18px; padding-top: 14px; border-top: 1px solid {border}; }}
+    .mini-tabs {{
+      display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0 8px;
+    }}
+    .mini-tab {{
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 11px; font-weight: 500; color: {text_muted};
+      padding: 3px 8px; border: 1px solid {border}; background: {bg};
+      border-radius: 3px; cursor: pointer; transition: all .12s ease;
+    }}
+    .mini-tab:hover {{ color: {text}; border-color: {accent}; }}
+    .mini-tab.active {{ background: {accent}; color: white; border-color: {accent}; }}
+    .mini-chart-canvas {{ height: 200px; min-height: 180px; }}
 
     /* KPI strip */
     .kpi-strip {{
@@ -2195,7 +2247,85 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           ${{sigLensRow}}
         </div>`;
 
-      return coverage + holdings + kpis + signalsBlock;
+      const priceChartBlock = `
+        <div class="mini-chart-block">
+          <div class="detail-block-title">Price history</div>
+          <div class="mini-tabs" data-tk="${{tk}}">
+            ${{['1D','1W','1M','3M','6M','YTD','1Y','2Y','5Y','10Y','ALL']
+              .map(function(tf) {{
+                return '<button class="mini-tab' + (tf==='1Y'?' active':'') + '" data-tf="' + tf + '">' + tf + '</button>';
+              }}).join('')}}
+          </div>
+          <div id="mini-chart-${{tk}}" class="mini-chart-canvas"></div>
+        </div>`;
+
+      return coverage + holdings + kpis + priceChartBlock + signalsBlock;
+    }}
+
+    function renderPriceChart(tk, tf) {{
+      const target = document.getElementById('mini-chart-' + tk);
+      const m = RADAR.metrics[tk] || {{}};
+      const ts = m.hist;
+      if (!target) return;
+      if (!ts || !ts.d || !ts.d.length) {{
+        target.innerHTML = '<p style="font-size:12px;color:' + COLORS.text_muted + ';">No price history available.</p>';
+        return;
+      }}
+      const epoch = new Date(ts.e + 'T00:00:00');
+      const dates = ts.d.map(function(d) {{ return new Date(epoch.getTime() + d * 86400000); }});
+      const prices = ts.p;
+      const now = new Date();
+      let cutoff = null;
+      const days = (n) => new Date(now.getTime() - n * 86400000);
+      switch(tf) {{
+        case '1D':  cutoff = days(2); break;
+        case '1W':  cutoff = days(8); break;
+        case '1M':  cutoff = days(31); break;
+        case '3M':  cutoff = days(92); break;
+        case '6M':  cutoff = days(183); break;
+        case 'YTD': cutoff = new Date(now.getFullYear(), 0, 1); break;
+        case '1Y':  cutoff = days(366); break;
+        case '2Y':  cutoff = days(2*366); break;
+        case '5Y':  cutoff = days(5*366); break;
+        case '10Y': cutoff = days(10*366); break;
+        case 'ALL': cutoff = null; break;
+      }}
+      let i0 = 0;
+      if (cutoff) {{
+        i0 = dates.findIndex(function(d) {{ return d >= cutoff; }});
+        if (i0 < 0) i0 = dates.length - 1;
+      }}
+      const x = dates.slice(i0);
+      const y = prices.slice(i0);
+      if (x.length < 2) {{
+        target.innerHTML = '<p style="font-size:12px;color:' + COLORS.text_muted + ';">Not enough data for this window.</p>';
+        return;
+      }}
+      const start = y[0], end = y[y.length-1];
+      const ret = ((end / start) - 1) * 100;
+      const lineColor = ret >= 0 ? COLORS.green : COLORS.red;
+      // Plotly does NOT accept 8-digit hex — convert to rgba for fill (memory rule)
+      const hexParts = lineColor.replace('#','').match(/.{{2}}/g) || ['16','a3','4a'];
+      const fillColor = 'rgba(' + parseInt(hexParts[0],16) + ',' + parseInt(hexParts[1],16) + ',' + parseInt(hexParts[2],16) + ',0.08)';
+      Plotly.newPlot(target, [{{
+        x: x, y: y, type: 'scatter', mode: 'lines',
+        line: {{ color: lineColor, width: 1.8 }},
+        fill: 'tozeroy', fillcolor: fillColor,
+        hovertemplate: '%{{x|%b %-d, %Y}}: $%{{y:,.2f}}<extra></extra>',
+      }}], {{
+        margin: {{ l: 48, r: 8, t: 4, b: 28 }},
+        height: 180,
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        xaxis: {{ showgrid: false, color: COLORS.text_muted, tickfont: {{ size: 10 }} }},
+        yaxis: {{ gridcolor: COLORS.grid, color: COLORS.text_muted, tickfont: {{ size: 10 }}, tickprefix: '$', automargin: true }},
+        showlegend: false,
+        annotations: [{{
+          xref: 'paper', yref: 'paper', x: 1, y: 1, xanchor: 'right', yanchor: 'top',
+          text: '<b>' + (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%</b> over ' + tf,
+          showarrow: false, font: {{ size: 11, color: lineColor }},
+        }}]
+      }}, {{ displayModeBar: false, responsive: true }});
     }}
 
     document.querySelectorAll('tr.screener-row').forEach(row => {{
@@ -2211,6 +2341,17 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           panel.innerHTML = buildDetailPanel(tk);
           detail.hidden = false;
           row.classList.add('expanded');
+          // Render mini price chart with default 1Y window
+          renderPriceChart(tk, '1Y');
+          // Wire timeframe tabs
+          panel.querySelectorAll('.mini-tabs .mini-tab').forEach(function(btn) {{
+            btn.addEventListener('click', function(ev) {{
+              ev.stopPropagation();
+              panel.querySelectorAll('.mini-tabs .mini-tab').forEach(function(b) {{ b.classList.remove('active'); }});
+              btn.classList.add('active');
+              renderPriceChart(tk, btn.dataset.tf);
+            }});
+          }});
         }} else {{
           detail.hidden = true;
           row.classList.remove('expanded');
