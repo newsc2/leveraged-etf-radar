@@ -873,14 +873,33 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     tr.detail-row > td {{ padding: 0; background: {panel_bg};
                           border-bottom: 1px solid {border}; }}
     .detail-panel {{
-      display: grid; grid-template-columns: 1.2fr 1fr 1.2fr 1.2fr; gap: 22px;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1.5fr;
+      grid-template-areas:
+        "coverage holdings perf"
+        "signals  signals  chart";
+      gap: 22px;
       padding: 18px 24px; max-width: 100%;
     }}
+    .detail-panel > .detail-coverage  {{ grid-area: coverage; }}
+    .detail-panel > .detail-holdings  {{ grid-area: holdings; }}
+    .detail-panel > .detail-perf      {{ grid-area: perf; }}
+    .detail-panel > .detail-signals   {{ grid-area: signals; }}
+    .detail-panel > .mini-chart-block {{ grid-area: chart; }}
     @media (max-width: 1200px) {{
-      .detail-panel {{ grid-template-columns: 1fr 1fr; }}
+      .detail-panel {{
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+          "coverage holdings"
+          "perf     perf"
+          "signals  chart";
+      }}
     }}
     @media (max-width: 700px) {{
-      .detail-panel {{ grid-template-columns: 1fr; }}
+      .detail-panel {{
+        grid-template-columns: 1fr;
+        grid-template-areas: "coverage" "holdings" "perf" "chart" "signals";
+      }}
     }}
     .detail-block-title {{
       font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700;
@@ -2186,7 +2205,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       const noClass = (v, label, fmtFn) =>
         `<div class="detail-kpi"><div class="v">${{fmtFn(v)}}</div><div class="l">${{label}}</div></div>`;
       const kpis = `
-        <div>
+        <div class="detail-perf">
           <div class="detail-block-title">Performance &amp; risk</div>
           <div class="detail-kpis">
             ${{noClass(m['price'], 'Last close', fmtPrice)}}
