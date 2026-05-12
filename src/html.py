@@ -67,6 +67,15 @@ def _fmt_num(v: float | None, decimals: int = 2) -> str:
     return "—" if v is None else f"{v:.{decimals}f}"
 
 
+def _fmt_price(v: float | None) -> str:
+    """Render a USD price. Compact for big numbers (KORU ~$983), 2dp default."""
+    if v is None:
+        return "—"
+    if v >= 1000:
+        return f"${v:,.0f}"
+    return f"${v:.2f}"
+
+
 def build_screener_table(funds: list[Fund], metrics: dict[str, FundMetrics]) -> str:
     rows_html: list[str] = []
     for f in sorted(funds, key=lambda f: f.ticker):
@@ -86,6 +95,7 @@ def build_screener_table(funds: list[Fund], metrics: dict[str, FundMetrics]) -> 
             <td class="cell-issuer">{escape(f.issuer or "")}</td>
             <td class="cell-lev">{lev}</td>
             <td class="cell-target">{target}</td>
+            <td class="num">{_fmt_price(m.latest_close)}</td>
             <td class="num">{_fmt_pct(m.return_ytd)}</td>
             <td class="num">{_fmt_pct(m.return_1y)}</td>
             <td class="num">{_fmt_pct(m.return_5y)}</td>
@@ -93,7 +103,7 @@ def build_screener_table(funds: list[Fund], metrics: dict[str, FundMetrics]) -> 
             <td class="num">{_fmt_num(m.realized_beta_60d)}</td>
           </tr>
           <tr class="detail-row" id="detail-{f.ticker}" hidden>
-            <td colspan="9"><div class="detail-panel" id="detail-panel-{f.ticker}"></div></td>
+            <td colspan="10"><div class="detail-panel" id="detail-panel-{f.ticker}"></div></td>
           </tr>""")
     rows = "\n".join(rows_html)
     return f"""
@@ -105,6 +115,7 @@ def build_screener_table(funds: list[Fund], metrics: dict[str, FundMetrics]) -> 
               <th data-sort="issuer">Issuer</th>
               <th data-sort="leverage">Lev</th>
               <th data-sort="target">Target</th>
+              <th class="num" data-sort="price">Price</th>
               <th class="num" data-sort="ytd">YTD</th>
               <th class="num" data-sort="1y">1Y</th>
               <th class="num" data-sort="5y">5Y</th>
@@ -198,6 +209,7 @@ def build_radar_json(
             "beta": m.realized_beta_60d, "gap": m.actual_minus_simulated_1y,
             "naive": m.naive_leverage_return_1y, "sim": m.simulated_daily_reset_1y,
             "addv": m.avg_daily_dollar_volume,
+            "price": m.latest_close,
         }
 
     # ── Holdings (compact) for the click-to-expand panel ──
@@ -1292,6 +1304,11 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       if (v >= 1e3) return '$' + (v/1e3).toFixed(0) + 'K';
       return '$' + v.toFixed(0);
     }}
+    function fmtPrice(v) {{
+      if (v === null || v === undefined || isNaN(v)) return '—';
+      if (v >= 1000) return '$' + v.toLocaleString('en-US', {{ maximumFractionDigits: 0 }});
+      return '$' + v.toFixed(2);
+    }}
     function median(arr) {{
       const filt = arr.filter(v => v !== null && v !== undefined && !isNaN(v)).sort((a, b) => a - b);
       if (!filt.length) return null;
@@ -2120,6 +2137,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         <div>
           <div class="detail-block-title">Performance &amp; risk</div>
           <div class="detail-kpis">
+            ${{noClass(m['price'], 'Last close', fmtPrice)}}
             ${{kpi(m['1m'], '1M return', fmtPct)}}
             ${{kpi(m['3m'], '3M return', fmtPct)}}
             ${{kpi(m['ytd'], 'YTD return', fmtPct)}}
@@ -2215,8 +2233,8 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           if (dr) detailMap.set(tr, dr);
         }});
         allTrs.sort((a, b) => {{
-          const aT = a.children[i].innerText.replace(/[+%×—pp▸]/g, '').trim();
-          const bT = b.children[i].innerText.replace(/[+%×—pp▸]/g, '').trim();
+          const aT = a.children[i].innerText.replace(/[+%×—pp▸$,]/g, '').trim();
+          const bT = b.children[i].innerText.replace(/[+%×—pp▸$,]/g, '').trim();
           const aN = parseFloat(aT), bN = parseFloat(bT);
           const isNum = !isNaN(aN) && !isNaN(bN);
           if (isNum) return asc ? aN - bN : bN - aN;
