@@ -478,6 +478,38 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     }}
     .filter-counter #filter-count {{ color: {text}; font-weight: 600; }}
 
+    /* Section nav rail */
+    .dashboard-nav {{
+      display: flex; flex-wrap: wrap; gap: 4px;
+      padding: 8px 0; margin: 24px 0 28px;
+      border-top: 1px solid {border};
+      border-bottom: 1px solid {border};
+    }}
+    .dashboard-nav a {{
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 12px; font-weight: 500; color: {text_muted};
+      text-decoration: none;
+      padding: 6px 11px; border-radius: 4px;
+      transition: background .15s ease, color .15s ease;
+    }}
+    .dashboard-nav a:hover {{
+      background: {panel_bg}; color: {text};
+    }}
+    .dashboard-nav .nav-marker {{
+      color: {text_light}; margin-right: 6px; font-size: 10px;
+    }}
+    .section-heading {{
+      font-family: 'Lora', Georgia, serif;
+      font-size: 22px; font-weight: 600; color: {text};
+      margin: 0 0 6px 0; letter-spacing: -0.015em;
+    }}
+    .section-desc {{
+      font-size: 14px; color: {text_muted};
+      margin: 0 0 22px 0; max-width: 880px; line-height: 1.55;
+    }}
+    .section-desc strong {{ color: {text}; }}
+    .section-anchor {{ scroll-margin-top: 72px; }}
+
     /* KPI strip */
     .kpi-strip {{
       display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -907,7 +939,19 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       </div>
     </div>
 
-    {nine_sig_panel}
+    <nav class="dashboard-nav" aria-label="Section navigation">
+      <a href="#9sig"><span class="nav-marker">◆</span>9Sig Plan</a>
+      <a href="#scan"><span class="nav-marker">▶</span>Daily Scan</a>
+      <a href="#performance"><span class="nav-marker">▶</span>Performance</a>
+      <a href="#movers"><span class="nav-marker">▶</span>Movers &amp; Risk</a>
+      <a href="#trend-drawdown"><span class="nav-marker">▶</span>Trend &amp; Drawdown</a>
+      <a href="#signals"><span class="nav-marker">▶</span>Signal Lists</a>
+      <a href="#screener"><span class="nav-marker">▶</span>Screener</a>
+    </nav>
+
+    <div id="9sig" class="section-anchor">
+      {nine_sig_panel}
+    </div>
 
     {filter_bar}
 
@@ -915,7 +959,15 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
 
     {summary_html}
 
-    <div class="section">
+    <div class="section section-anchor" id="scan">
+      <h3 class="section-heading">Daily Scan</h3>
+      <p class="section-desc">
+        Five quick scans across the filtered universe — <strong>Leaders</strong> and
+        <strong>Laggards</strong> by overall return, <strong>Stretched</strong> and
+        <strong>Oversold</strong> by RSI and 52-week distance, and <strong>Near Lows</strong>
+        for funds within 15% of their year low. Click a tab to switch the lens. Designed as a
+        60-second "what's standing out today" check.
+      </p>
       <div class="chart-title-row">
         <span class="accent-bar"></span>
         <h2 class="chart-title">Daily scan board — what's standing out today</h2>
@@ -947,7 +999,14 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       </div>
     </div>
 
-    <div class="section">
+    <div class="section section-anchor" id="performance">
+      <h3 class="section-heading">Performance</h3>
+      <p class="section-desc">
+        Headline cumulative return chart with timeframe pills (<strong>1M / 3M / YTD / 1Y / 3Y / 5Y / 10Y</strong>).
+        The pills here drive the KPIs above and the Movers / Risk-vs-Drawdown views below — switch them to
+        compress or expand the time horizon for every analytic in the dashboard. Useful for sanity-checking
+        whether the period you're looking at is dominated by one big move or by steady drift.
+      </p>
       <div class="chart-title-row">
         <span class="accent-bar"></span>
         <h2 class="chart-title">Cumulative return over the selected window</h2>
@@ -975,7 +1034,14 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       </div>
     </div>
 
-    <div class="section">
+    <div class="section section-anchor" id="movers">
+      <h3 class="section-heading">Movers &amp; Risk</h3>
+      <p class="section-desc">
+        Two views of the timeframe you've picked above: <strong>ranked best/worst movers</strong> (the
+        asymmetry between leveraged-long winners and inverse-fund losers is most visible during strong
+        directional moves), and the classic <strong>risk-vs-drawdown scatter</strong> — return earned
+        per dollar of pain, with both axes bounded at the −100% mathematical floor of a daily-reset LETF.
+      </p>
       <div class="summary-grid">
         <div class="chart-block">
           <div class="chart-title-row">
@@ -1026,7 +1092,14 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       </div>
     </div>
 
-    <div class="section">
+    <div class="section section-anchor" id="trend-drawdown">
+      <h3 class="section-heading">Trend &amp; Drawdown</h3>
+      <p class="section-desc">
+        Two technical views. <strong>Trend vs Stretch</strong> plots distance from the 200-day moving
+        average against RSI 14 — a quick map of which funds are stretched, oversold, or sitting in
+        neutral territory. The <strong>Drawdown map</strong> separates funds within striking distance
+        of their 52-week lows from those that just printed fresh 1-year highs.
+      </p>
       <div class="summary-grid">
         <div class="chart-block">
           <div class="chart-title-row">
@@ -1076,7 +1149,14 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       </div>
     </div>
 
-    <div class="section">
+    <div class="section section-anchor" id="signals">
+      <h3 class="section-heading">Signal Lists</h3>
+      <p class="section-desc">
+        Three compact ranked lists for the daily scan workflow: <strong>what's working</strong>,
+        <strong>what's stretched</strong>, and <strong>what's weakening</strong>. Designed to be
+        skimmed top-to-bottom in under a minute. The same five signal categories from the Daily Scan
+        board, but reorganized into "actionable" groupings rather than tabs.
+      </p>
       <div class="chart-title-row">
         <span class="accent-bar"></span>
         <h2 class="chart-title">Performance, stretch, and weak spots</h2>
@@ -1103,7 +1183,14 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       <p class="sig-note">TQQQ gets a small Kelly 9Sig watch card because it is the canonical fund for that discipline. Other ETFs are evaluated by ordinary performance, trend, stretch, and drawdown signals first.</p>
     </div>
 
-    <div class="section">
+    <div class="section section-anchor" id="screener">
+      <h3 class="section-heading">Screener</h3>
+      <p class="section-desc">
+        The filtered universe as a sortable table — <strong>click any row</strong> to expand holdings,
+        per-fund KPIs, signal flags, and the optional TQQQ 9Sig watch context when applicable. Filter
+        and timeframe selections from above propagate here, so what you see is consistent with the rest
+        of the dashboard. Best as the destination tool when you want to drill into a specific ticker.
+      </p>
       <div class="chart-title-row">
         <span class="accent-bar"></span>
         <h2 class="chart-title">The screener</h2>
