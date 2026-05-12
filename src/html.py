@@ -478,26 +478,43 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     }}
     .filter-counter #filter-count {{ color: {text}; font-weight: 600; }}
 
-    /* Section nav rail */
-    .dashboard-nav {{
-      display: flex; flex-wrap: wrap; gap: 4px;
-      padding: 8px 0; margin: 24px 0 28px;
-      border-top: 1px solid {border};
-      border-bottom: 1px solid {border};
+    /* Two-column layout: left sidebar nav + main content */
+    .layout {{
+      display: flex; gap: 32px; align-items: flex-start;
+      margin-top: 24px;
     }}
-    .dashboard-nav a {{
+    .sidebar {{
+      position: sticky; top: 16px;
+      width: 200px; flex: 0 0 200px;
+      align-self: flex-start;
+      max-height: calc(100vh - 32px); overflow-y: auto;
+      padding: 14px 0;
+      border-top: 2px solid {accent};
+    }}
+    .sidebar-label {{
+      font-size: 10px; font-weight: 700;
+      color: {text_light}; text-transform: uppercase;
+      letter-spacing: .08em; padding: 0 12px 8px;
+    }}
+    .sidebar nav {{
+      display: flex; flex-direction: column; gap: 2px;
+    }}
+    .sidebar nav a {{
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 12px; font-weight: 500; color: {text_muted};
+      font-size: 13px; font-weight: 500; color: {text_muted};
       text-decoration: none;
-      padding: 6px 11px; border-radius: 4px;
+      padding: 7px 12px; border-radius: 4px;
       transition: background .15s ease, color .15s ease;
+      display: flex; align-items: center;
     }}
-    .dashboard-nav a:hover {{
+    .sidebar nav a:hover {{
       background: {panel_bg}; color: {text};
     }}
-    .dashboard-nav .nav-marker {{
-      color: {text_light}; margin-right: 6px; font-size: 10px;
+    .sidebar nav .nav-marker {{
+      color: {text_light}; margin-right: 8px; font-size: 10px;
+      width: 10px; display: inline-block;
     }}
+    .main-content {{ flex: 1; min-width: 0; }}
     .section-heading {{
       font-family: 'Lora', Georgia, serif;
       font-size: 22px; font-weight: 600; color: {text};
@@ -874,6 +891,17 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         max-width: 100%; min-width: 0; overflow-wrap: break-word;
       }}
       .intro-section p, .page-header .subtitle {{ overflow-wrap: break-word; }}
+      .layout {{ flex-direction: column; gap: 0; }}
+      .sidebar {{
+        position: static; width: 100%; flex: 1; max-height: none;
+        overflow-y: visible; padding: 8px 0;
+        border-top: 1px solid {border}; border-bottom: 1px solid {border};
+      }}
+      .sidebar-label {{ display: none; }}
+      .sidebar nav {{
+        flex-direction: row; flex-wrap: wrap; gap: 4px;
+      }}
+      .sidebar nav a {{ padding: 5px 10px; font-size: 12px; }}
       .filter-shell {{ margin: 0 -16px 16px; }}
       .filter-bar {{
         flex-direction: column; align-items: stretch;
@@ -912,6 +940,21 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       <p class="meta">{total_funds} funds tracked &middot; updated {timestamp}</p>
     </header>
 
+    <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-label">Sections</div>
+      <nav aria-label="Section navigation">
+        <a href="#9sig"><span class="nav-marker">◆</span>9Sig Plan</a>
+        <a href="#scan"><span class="nav-marker">▶</span>Daily Scan</a>
+        <a href="#performance"><span class="nav-marker">▶</span>Performance</a>
+        <a href="#movers"><span class="nav-marker">▶</span>Movers &amp; Risk</a>
+        <a href="#trend-drawdown"><span class="nav-marker">▶</span>Trend &amp; Drawdown</a>
+        <a href="#signals"><span class="nav-marker">▶</span>Signal Lists</a>
+        <a href="#screener"><span class="nav-marker">▶</span>Screener</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+
     <div class="intro-block">
       <div class="intro-section">
         <h3>What this is</h3>
@@ -938,16 +981,6 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         </p>
       </div>
     </div>
-
-    <nav class="dashboard-nav" aria-label="Section navigation">
-      <a href="#9sig"><span class="nav-marker">◆</span>9Sig Plan</a>
-      <a href="#scan"><span class="nav-marker">▶</span>Daily Scan</a>
-      <a href="#performance"><span class="nav-marker">▶</span>Performance</a>
-      <a href="#movers"><span class="nav-marker">▶</span>Movers &amp; Risk</a>
-      <a href="#trend-drawdown"><span class="nav-marker">▶</span>Trend &amp; Drawdown</a>
-      <a href="#signals"><span class="nav-marker">▶</span>Signal Lists</a>
-      <a href="#screener"><span class="nav-marker">▶</span>Screener</a>
-    </nav>
 
     <div id="9sig" class="section-anchor">
       {nine_sig_panel}
@@ -1197,6 +1230,9 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         <p class="chart-subtitle">All filtered funds. Click a row to expand its top holdings, full KPI grid, and source confidence. Click a column header to sort.</p>
       </div>
       {screener}
+    </div>
+
+    </main>
     </div>
 
     <div class="footer">
