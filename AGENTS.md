@@ -102,7 +102,7 @@ If a parser fails, downgrade confidence; never fabricate holdings.
 - `src/sig_lens.py` — Codex's earlier read-only analytical lens (signal/gap calc, no orders). Complementary, not duplicative.
 
 **State files:**
-- `data/sig_plans/9sig_quarterly_history.json` — 38 quarters of post-rebalance balances (verified against Kelly's published page to the dollar).
+- `data/sig_plans/9sig_quarterly_history.json` — normalized 9Sig action history rows (`quarter`, `action_type`, allocations, portfolio value, QoQ change), sourced from the 9Sig History PDF.
 - `data/sig_plans/9sig_current_state.json` — latest Kelly snapshot (shares, prior_goal, last fill price, 30-Down state). Refresh weekly when Kelly's Sunday note arrives.
 
 **Dashboard panel:** A 9Sig table + KPI strip injected near the top of the dashboard (between intro-block and filter-bar). Auto-builds on every `python export_static.py` run using live TQQQ + AGG closes from Yahoo Finance. Verified against Kelly Note 19 (2026-05-10) to the dollar.

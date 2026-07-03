@@ -31,6 +31,7 @@ import pandas as pd
 from src.config import COLORS, LEVERAGE_COLORS
 from src.holdings import Holdings
 from src.metrics import FundMetrics
+from src.ninesig_history import ninesig_history_to_dicts
 from src.sig_lens import SigLens, sig_lens_to_dict
 from src.signals import FundSignals, signals_to_dict
 from src.universe import Fund
@@ -79,7 +80,7 @@ def _fmt_price(v: float | None) -> str:
 _PRICE_EPOCH = pd.Timestamp("2016-01-01")
 
 
-def _decimate_series(series: "pd.Series | None") -> dict[str, Any] | None:
+def _decimate_series(series: pd.Series | None) -> dict[str, Any] | None:
     """Compact 10y price history for the row-expand mini chart.
 
     Layout: daily for the last 1Y, weekly for 1Y-5Y, monthly for older.
@@ -281,6 +282,7 @@ def build_radar_json(
         "holdings": holdings_obj,
         "signals": signals_obj,
         "sig_lens": sig_lens_obj,
+        "nine_sig_history": ninesig_history_to_dicts(),
     }
     return json.dumps(payload, separators=(",", ":"), default=str)
 
@@ -496,6 +498,120 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     @media (max-width: 720px) {{
       .ninesig-kpis {{ grid-template-columns: repeat(2, 1fr); }}
       .ninesig-verdict {{ min-width: 0; }}
+    }}
+
+    /* 9Sig history page */
+    .ninesig-history-section {{
+      margin-bottom: 36px;
+      padding-bottom: 28px;
+      border-bottom: 1px solid {border};
+    }}
+    .ninesig-scenario-bar {{
+      display: grid; grid-template-columns: minmax(190px, 260px) minmax(170px, 240px) auto;
+      gap: 10px; align-items: end; margin: 16px 0 18px;
+      background: {panel_bg}; border-left: 3px solid {accent};
+      padding: 14px 16px;
+    }}
+    .ninesig-field {{
+      display: flex; flex-direction: column; gap: 4px;
+      font-size: 11px; font-weight: 700; color: {text_light};
+      text-transform: uppercase; letter-spacing: .06em;
+    }}
+    .ninesig-field select,
+    .ninesig-field input {{
+      width: 100%; min-height: 34px; border: 1px solid {border};
+      background: {card_bg}; color: {text}; border-radius: 4px;
+      font: 500 13px 'Inter', system-ui, sans-serif;
+      padding: 6px 10px; font-variant-numeric: tabular-nums;
+    }}
+    .ninesig-history-reset {{
+      min-height: 34px; padding: 6px 12px; border: 1px solid {border};
+      background: {card_bg}; color: {text_muted}; border-radius: 4px;
+      font: 600 12px 'Inter', system-ui, sans-serif;
+      cursor: pointer;
+    }}
+    .ninesig-history-reset:hover {{ color: {text}; border-color: {accent}; }}
+    .ninesig-history-kpis {{
+      display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr));
+      gap: 10px; margin-bottom: 24px;
+    }}
+    .ninesig-history-kpi {{
+      padding: 14px 16px; background: {panel_bg};
+      border-left: 3px solid {accent};
+    }}
+    .ninesig-history-kpi:nth-child(2) {{ border-left-color: {cat_2}; }}
+    .ninesig-history-kpi:nth-child(3) {{ border-left-color: {green}; }}
+    .ninesig-history-kpi:nth-child(4) {{ border-left-color: {red}; }}
+    .ninesig-history-kpi:nth-child(5) {{ border-left-color: {cat_5}; }}
+    .ninesig-history-kpi .label {{
+      font-size: 10px; color: {text_light}; text-transform: uppercase;
+      letter-spacing: .07em; font-weight: 700; margin-bottom: 5px;
+    }}
+    .ninesig-history-kpi .value {{
+      font-family: 'Lora', Georgia, serif; font-size: 22px; font-weight: 700;
+      color: {text}; line-height: 1.15; font-variant-numeric: tabular-nums;
+    }}
+    .ninesig-history-kpi .value.pos {{ color: {green}; }}
+    .ninesig-history-kpi .value.neg {{ color: {red}; }}
+    .ninesig-history-kpi .hint {{
+      font-size: 11px; color: {text_light}; margin-top: 4px; line-height: 1.35;
+    }}
+    .ninesig-history-chart-grid {{
+      display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-bottom: 26px;
+    }}
+    .ninesig-history-chart-wide {{ grid-column: 1 / -1; }}
+    .ninesig-history-chart {{
+      height: 320px; min-height: 280px; width: 100%;
+    }}
+    .ninesig-history-chart-wide .ninesig-history-chart {{ height: 360px; }}
+    .ninesig-history-table {{
+      width: 100%; border-collapse: collapse; font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }}
+    .ninesig-history-table th {{
+      text-align: left; padding: 9px 10px; font-weight: 700;
+      font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+      color: {text_light}; background: {panel_bg};
+      border-bottom: 1px solid {border}; white-space: nowrap;
+    }}
+    .ninesig-history-table th.num,
+    .ninesig-history-table td.num {{ text-align: right; }}
+    .ninesig-history-table td {{
+      padding: 9px 10px; border-bottom: 1px solid {border};
+      vertical-align: top; color: {text};
+    }}
+    .ninesig-history-table td.pos {{ color: {green}; font-weight: 600; }}
+    .ninesig-history-table td.neg {{ color: {red}; font-weight: 600; }}
+    .ninesig-history-table .notes {{
+      color: {text_muted}; min-width: 240px; line-height: 1.4;
+    }}
+    .ninesig-action-badge {{
+      display: inline-block; border-radius: 3px; padding: 3px 7px;
+      font-size: 11px; font-weight: 700; line-height: 1.2;
+      white-space: nowrap;
+    }}
+    .ninesig-action-buy {{ background: rgba(42, 134, 54, .12); color: {green}; }}
+    .ninesig-action-sell {{ background: rgba(204, 50, 50, .10); color: {red}; }}
+    .ninesig-action-no-action {{ background: {bg}; color: {text_light}; border: 1px solid {border}; }}
+    .ninesig-action-reset {{ background: rgba(233, 178, 55, .17); color: #8a6818; }}
+    .ninesig-action-initial {{ background: rgba(46, 110, 158, .13); color: {cat_2}; }}
+    .ninesig-history-source {{
+      margin-top: 14px; font-size: 12px; color: {text_light};
+      border-top: 1px solid {border}; padding-top: 12px;
+    }}
+    @media (max-width: 1050px) {{
+      .ninesig-history-kpis {{ grid-template-columns: repeat(3, 1fr); }}
+      .ninesig-history-chart-grid {{ grid-template-columns: 1fr; }}
+      .ninesig-history-chart-wide {{ grid-column: auto; }}
+    }}
+    @media (max-width: 720px) {{
+      .ninesig-scenario-bar {{ grid-template-columns: 1fr; }}
+      .ninesig-history-kpis {{ grid-template-columns: 1fr 1fr; }}
+      .ninesig-history-kpi .value {{ font-size: 19px; }}
+      .ninesig-history-chart {{ min-width: 620px; }}
+      .ninesig-history-chart-scroll {{
+        overflow-x: auto; -webkit-overflow-scrolling: touch;
+      }}
     }}
 
     /* Sticky filter bar */
@@ -1028,6 +1144,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       <div class="sidebar-label">Sections</div>
       <nav aria-label="Section navigation">
         <a href="#9sig"><span class="nav-marker">◆</span>9Sig Plan</a>
+        <a href="#9sig-history"><span class="nav-marker">◆</span>9Sig History</a>
         <a href="#scan"><span class="nav-marker">▶</span>Daily Scan</a>
         <a href="#performance"><span class="nav-marker">▶</span>Performance</a>
         <a href="#movers"><span class="nav-marker">▶</span>Movers &amp; Risk</a>
@@ -1067,6 +1184,80 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
 
     <div id="9sig" class="section-anchor">
       {nine_sig_panel}
+    </div>
+
+    <div class="section section-anchor ninesig-history-section" id="9sig-history">
+      <h3 class="section-heading">9Sig History</h3>
+      <p class="section-desc">
+        Chronological post-action 9Sig balances with scenario controls for rebasing the published
+        path to a different starting value or later starting quarter.
+      </p>
+
+      <div class="ninesig-scenario-bar" aria-label="9Sig scenario controls">
+        <label class="ninesig-field" for="ninesig-history-start-date">
+          <span>Starting Date</span>
+          <select id="ninesig-history-start-date"></select>
+        </label>
+        <label class="ninesig-field" for="ninesig-history-start-value">
+          <span>Starting Value</span>
+          <input id="ninesig-history-start-value" type="number" min="1" step="1000" inputmode="numeric">
+        </label>
+        <button class="ninesig-history-reset" id="ninesig-history-reset" type="button">Reset</button>
+      </div>
+
+      <div class="ninesig-history-kpis" id="ninesig-history-kpis"></div>
+
+      <div class="ninesig-history-chart-grid">
+        <div class="chart-block ninesig-history-chart-wide">
+          <div class="chart-title-row">
+            <span class="accent-bar"></span>
+            <h2 class="chart-title">Portfolio value</h2>
+            <p class="chart-subtitle">Rebased to the selected starting value and starting quarter.</p>
+          </div>
+          <div class="ninesig-history-chart-scroll">
+            <div id="ninesig-value-chart" class="ninesig-history-chart"></div>
+          </div>
+        </div>
+        <div class="chart-block">
+          <div class="chart-title-row">
+            <span class="accent-bar"></span>
+            <h2 class="chart-title">TQQQ / AGG allocation</h2>
+            <p class="chart-subtitle">Post-action allocation at each quarterly action date.</p>
+          </div>
+          <div class="ninesig-history-chart-scroll">
+            <div id="ninesig-allocation-chart" class="ninesig-history-chart"></div>
+          </div>
+        </div>
+        <div class="chart-block">
+          <div class="chart-title-row">
+            <span class="accent-bar"></span>
+            <h2 class="chart-title">Quarter-over-quarter change</h2>
+            <p class="chart-subtitle">Published QoQ portfolio change, excluding the selected starting row.</p>
+          </div>
+          <div class="ninesig-history-chart-scroll">
+            <div id="ninesig-qoq-chart" class="ninesig-history-chart"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="ninesig-history-table" id="ninesig-history-table">
+          <thead>
+            <tr>
+              <th>Quarter</th>
+              <th>Action Date</th>
+              <th>Action</th>
+              <th class="num">TQQQ %</th>
+              <th class="num">AGG %</th>
+              <th class="num">Portfolio Value</th>
+              <th class="num">QoQ Change</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="ninesig-history-body"></tbody>
+        </table>
+      </div>
+      <p class="ninesig-history-source">Source: 9Sig History PDF, quarterly post-action balances. Portfolio value = TQQQ + AGG + cash.</p>
     </div>
 
     {filter_bar}
@@ -1385,6 +1576,289 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       if (!filt.length) return null;
       const mid = Math.floor(filt.length / 2);
       return filt.length % 2 ? filt[mid] : (filt[mid-1] + filt[mid]) / 2;
+    }}
+    const usdFullFmt = new Intl.NumberFormat('en-US', {{
+      style: 'currency', currency: 'USD', maximumFractionDigits: 0,
+    }});
+    function fmtUsdFull(v) {{
+      if (v === null || v === undefined || isNaN(v)) return '—';
+      return usdFullFmt.format(v);
+    }}
+    function fmtAlloc(v) {{
+      if (v === null || v === undefined || isNaN(v)) return '—';
+      return (v * 100).toFixed(1) + '%';
+    }}
+    function fmtQoq(v) {{
+      if (v === null || v === undefined || isNaN(v)) return '—';
+      const pct = v * 100;
+      return (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+    }}
+    function fmtIsoDate(iso) {{
+      if (!iso) return '—';
+      const p = iso.split('-');
+      return p.length === 3 ? p[1] + '/' + p[2] + '/' + p[0] : iso;
+    }}
+    function escapeHtml(s) {{
+      return String(s || '').replace(/[&<>"']/g, function(ch) {{
+        return {{ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }}[ch];
+      }});
+    }}
+
+    // -----------------------------------------------------------
+    // 9Sig history scenario controls
+    // -----------------------------------------------------------
+    const NINESIG_HISTORY = RADAR.nine_sig_history || [];
+    const DEFAULT_NINESIG_START_VALUE = NINESIG_HISTORY.length
+      ? NINESIG_HISTORY[0].portfolio_value
+      : 0;
+    let ninesigStartValueEdited = false;
+
+    function nineSigActionClass(type) {{
+      if (type === 'initial') return 'ninesig-action-initial';
+      if (type === 'reset_60_40') return 'ninesig-action-reset';
+      if (type === 'no_action') return 'ninesig-action-no-action';
+      if (type === 'sell_tqqq') return 'ninesig-action-sell';
+      return 'ninesig-action-buy';
+    }}
+
+    function readNineSigScenario() {{
+      const select = document.getElementById('ninesig-history-start-date');
+      const input = document.getElementById('ninesig-history-start-value');
+      const rawIndex = select ? parseInt(select.value, 10) : 0;
+      const startIndex = Number.isFinite(rawIndex)
+        ? Math.max(0, Math.min(rawIndex, NINESIG_HISTORY.length - 1))
+        : 0;
+      const rawValue = input ? parseFloat(input.value) : DEFAULT_NINESIG_START_VALUE;
+      const startValue = Number.isFinite(rawValue) && rawValue > 0
+        ? rawValue
+        : DEFAULT_NINESIG_START_VALUE;
+      return {{ startIndex, startValue }};
+    }}
+
+    function nineSigScenarioRows() {{
+      if (!NINESIG_HISTORY.length) return [];
+      const scenario = readNineSigScenario();
+      const baseRow = NINESIG_HISTORY[scenario.startIndex] || NINESIG_HISTORY[0];
+      const baseValue = baseRow.portfolio_value || 1;
+      return NINESIG_HISTORY.slice(scenario.startIndex).map(function(row, idx) {{
+        return Object.assign({{}}, row, {{
+          scenario_portfolio_value: row.portfolio_value / baseValue * scenario.startValue,
+          scenario_qoq_change: idx === 0 ? null : row.qoq_change,
+        }});
+      }});
+    }}
+
+    function yearsBetween(startIso, endIso) {{
+      const start = Date.parse(startIso + 'T00:00:00');
+      const end = Date.parse(endIso + 'T00:00:00');
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+      return (end - start) / (365.25 * 86400000);
+    }}
+
+    function renderNineSigHistoryKpis(rows) {{
+      const host = document.getElementById('ninesig-history-kpis');
+      if (!host) return;
+      if (!rows.length) {{
+        host.innerHTML = '';
+        return;
+      }}
+
+      const first = rows[0];
+      const latest = rows[rows.length - 1];
+      const years = yearsBetween(first.date, latest.date);
+      const cagr = years > 0
+        ? Math.pow(latest.scenario_portfolio_value / first.scenario_portfolio_value, 1 / years) - 1
+        : null;
+      const qoqRows = rows.filter(function(r) {{
+        return r.scenario_qoq_change !== null && r.scenario_qoq_change !== undefined;
+      }});
+      const best = qoqRows.length
+        ? qoqRows.reduce(function(a, b) {{ return b.scenario_qoq_change > a.scenario_qoq_change ? b : a; }})
+        : null;
+      const worst = qoqRows.length
+        ? qoqRows.reduce(function(a, b) {{ return b.scenario_qoq_change < a.scenario_qoq_change ? b : a; }})
+        : null;
+
+      function card(label, value, hint, cls) {{
+        return `<div class="ninesig-history-kpi">
+          <div class="label">${{label}}</div>
+          <div class="value ${{cls || ''}}">${{value}}</div>
+          <div class="hint">${{hint || ''}}</div>
+        </div>`;
+      }}
+
+      host.innerHTML = [
+        card('Latest portfolio value', fmtUsdFull(latest.scenario_portfolio_value), latest.quarter + ' · ' + fmtIsoDate(latest.date)),
+        card('CAGR since inception', fmtQoq(cagr), first.quarter + ' → ' + latest.quarter, cagr != null && cagr >= 0 ? 'pos' : 'neg'),
+        card('Best quarter', best ? fmtQoq(best.scenario_qoq_change) : '—', best ? best.quarter : '', 'pos'),
+        card('Worst quarter', worst ? fmtQoq(worst.scenario_qoq_change) : '—', worst ? worst.quarter : '', 'neg'),
+        card('Current allocation', fmtAlloc(latest.tqqq_allocation) + ' / ' + fmtAlloc(latest.agg_allocation), 'TQQQ / AGG'),
+      ].join('');
+    }}
+
+    function renderNineSigHistoryTable(rows) {{
+      const body = document.getElementById('ninesig-history-body');
+      if (!body) return;
+      body.innerHTML = rows.map(function(row) {{
+        const qoq = row.scenario_qoq_change;
+        const qoqClass = qoq === null || qoq === undefined ? '' : (qoq >= 0 ? 'pos' : 'neg');
+        return `<tr>
+          <td><strong>${{escapeHtml(row.quarter)}}</strong></td>
+          <td>${{fmtIsoDate(row.date)}}</td>
+          <td><span class="ninesig-action-badge ${{nineSigActionClass(row.action_type)}}">${{escapeHtml(row.action)}}</span></td>
+          <td class="num">${{fmtAlloc(row.tqqq_allocation)}}</td>
+          <td class="num">${{fmtAlloc(row.agg_allocation)}}</td>
+          <td class="num">${{fmtUsdFull(row.scenario_portfolio_value)}}</td>
+          <td class="num ${{qoqClass}}">${{fmtQoq(qoq)}}</td>
+          <td class="notes">${{escapeHtml(row.notes)}}</td>
+        </tr>`;
+      }}).join('');
+    }}
+
+    function renderNineSigHistoryCharts(rows) {{
+      if (!rows.length) return;
+      const chartOpts = {{ displayModeBar: false, scrollZoom: false, responsive: true, doubleClick: false }};
+      const x = rows.map(function(r) {{ return r.date; }});
+      const latest = rows[rows.length - 1];
+
+      Plotly.newPlot('ninesig-value-chart', [{{
+        x: x,
+        y: rows.map(function(r) {{ return r.scenario_portfolio_value; }}),
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {{ color: COLORS.accent, width: 2.2 }},
+        marker: {{ size: 5, color: COLORS.accent, line: {{ color: 'white', width: 1 }} }},
+        hovertemplate: '<b>%{{x}}</b><br>Value: $%{{y:,.0f}}<extra></extra>',
+      }}], editorialLayout({{
+        margin: {{ l: 74, r: 78, t: 8, b: 42 }},
+        yaxis: {{
+          gridcolor: COLORS.grid, gridwidth: 0.5, zeroline: false, fixedrange: true,
+          showline: false, ticks: '', tickfont: {{ color: COLORS.text_light, size: 11 }},
+          tickprefix: '$', tickformat: ',.0f',
+          title: {{ text: 'Portfolio value', font: {{ size: 11, color: COLORS.text_light }} }},
+        }},
+        annotations: [{{
+          x: latest.date, y: latest.scenario_portfolio_value,
+          text: '<b>' + fmtMoney(latest.scenario_portfolio_value) + '</b>',
+          showarrow: false, xanchor: 'left', yanchor: 'middle', xshift: 8,
+          font: {{ size: 11, color: COLORS.accent, family: FONT_SANS }},
+        }}],
+        hovermode: 'x unified',
+      }}), chartOpts);
+
+      const lastAggMid = latest.agg_allocation * 50;
+      const lastTqqqMid = latest.agg_allocation * 100 + latest.tqqq_allocation * 50;
+      Plotly.newPlot('ninesig-allocation-chart', [
+        {{
+          x: x,
+          y: rows.map(function(r) {{ return r.agg_allocation * 100; }}),
+          type: 'scatter', mode: 'lines', stackgroup: 'alloc',
+          line: {{ width: 0, color: COLORS.cat_5 }},
+          fillcolor: COLORS.cat_5,
+          name: 'AGG',
+          hovertemplate: 'AGG: %{{y:.1f}}%<extra></extra>',
+        }},
+        {{
+          x: x,
+          y: rows.map(function(r) {{ return r.tqqq_allocation * 100; }}),
+          type: 'scatter', mode: 'lines', stackgroup: 'alloc',
+          line: {{ width: 0, color: COLORS.accent }},
+          fillcolor: COLORS.accent,
+          name: 'TQQQ',
+          hovertemplate: 'TQQQ: %{{y:.1f}}%<extra></extra>',
+        }},
+      ], editorialLayout({{
+        margin: {{ l: 58, r: 64, t: 8, b: 42 }},
+        yaxis: {{
+          gridcolor: COLORS.grid, gridwidth: 0.5, fixedrange: true,
+          showline: false, ticks: '', tickfont: {{ color: COLORS.text_light, size: 11 }},
+          ticksuffix: '%', range: [0, 100],
+          title: {{ text: 'Allocation', font: {{ size: 11, color: COLORS.text_light }} }},
+        }},
+        annotations: [
+          {{
+            x: latest.date, y: lastTqqqMid, text: 'TQQQ',
+            showarrow: false, xanchor: 'left', yanchor: 'middle', xshift: 8,
+            font: {{ size: 11, color: COLORS.accent, family: FONT_SANS }},
+          }},
+          {{
+            x: latest.date, y: lastAggMid, text: 'AGG',
+            showarrow: false, xanchor: 'left', yanchor: 'middle', xshift: 8,
+            font: {{ size: 11, color: COLORS.cat_5, family: FONT_SANS }},
+          }},
+        ],
+        hovermode: 'x unified',
+      }}), chartOpts);
+
+      const qoqRows = rows.filter(function(r) {{
+        return r.scenario_qoq_change !== null && r.scenario_qoq_change !== undefined;
+      }});
+      Plotly.newPlot('ninesig-qoq-chart', [{{
+        x: qoqRows.map(function(r) {{ return r.date; }}),
+        y: qoqRows.map(function(r) {{ return r.scenario_qoq_change * 100; }}),
+        type: 'bar',
+        marker: {{
+          color: qoqRows.map(function(r) {{
+            return r.scenario_qoq_change >= 0 ? COLORS.green : COLORS.red;
+          }}),
+        }},
+        hovertemplate: '<b>%{{x}}</b><br>QoQ: %{{y:+.1f}}%<extra></extra>',
+      }}], editorialLayout({{
+        margin: {{ l: 56, r: 24, t: 8, b: 42 }},
+        yaxis: {{
+          gridcolor: COLORS.grid, gridwidth: 0.5, fixedrange: true,
+          showline: false, ticks: '', tickfont: {{ color: COLORS.text_light, size: 11 }},
+          ticksuffix: '%',
+          title: {{ text: 'QoQ change', font: {{ size: 11, color: COLORS.text_light }} }},
+        }},
+        shapes: [{{
+          type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: 0, y1: 0,
+          line: {{ color: COLORS.text_light, dash: 'dot', width: 1 }},
+        }}],
+      }}), chartOpts);
+    }}
+
+    function renderNineSigHistory() {{
+      const section = document.getElementById('9sig-history');
+      if (!NINESIG_HISTORY.length) {{
+        if (section) section.style.display = 'none';
+        return;
+      }}
+      const rows = nineSigScenarioRows();
+      renderNineSigHistoryKpis(rows);
+      renderNineSigHistoryCharts(rows);
+      renderNineSigHistoryTable(rows);
+    }}
+
+    function wireNineSigHistoryControls() {{
+      const select = document.getElementById('ninesig-history-start-date');
+      const input = document.getElementById('ninesig-history-start-value');
+      const reset = document.getElementById('ninesig-history-reset');
+      if (!select || !input || !NINESIG_HISTORY.length) return;
+
+      select.innerHTML = NINESIG_HISTORY.map(function(row, idx) {{
+        return '<option value="' + idx + '">' + escapeHtml(row.quarter + ' · ' + fmtIsoDate(row.date)) + '</option>';
+      }}).join('');
+      input.value = Math.round(DEFAULT_NINESIG_START_VALUE);
+
+      select.addEventListener('change', function() {{
+        const idx = parseInt(select.value, 10);
+        const row = NINESIG_HISTORY[idx] || NINESIG_HISTORY[0];
+        if (!ninesigStartValueEdited) input.value = Math.round(row.portfolio_value);
+        renderNineSigHistory();
+      }});
+      input.addEventListener('input', function() {{
+        ninesigStartValueEdited = true;
+        renderNineSigHistory();
+      }});
+      if (reset) {{
+        reset.addEventListener('click', function() {{
+          ninesigStartValueEdited = false;
+          select.value = '0';
+          input.value = Math.round(DEFAULT_NINESIG_START_VALUE);
+          renderNineSigHistory();
+        }});
+      }}
     }}
 
     // -----------------------------------------------------------
@@ -2409,6 +2883,8 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       }});
     }});
 
+    wireNineSigHistoryControls();
+    renderNineSigHistory();
     applyFilters();
   }})();
   </script>

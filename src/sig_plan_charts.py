@@ -20,6 +20,7 @@ from typing import Any
 import plotly.graph_objects as go
 
 from src.config import CHART_LAYOUT, COLORS, DATA_DIR, DIST_DIR
+from src.ninesig_history import ninesig_history_to_dicts
 
 HISTORY_FILE: Path = DATA_DIR / "sig_plans" / "9sig_quarterly_history.json"
 STATE_FILE: Path = DATA_DIR / "sig_plans" / "9sig_current_state.json"
@@ -27,9 +28,7 @@ STATE_FILE: Path = DATA_DIR / "sig_plans" / "9sig_current_state.json"
 
 def load_history() -> list[dict[str, Any]]:
     """Load the quarterly action history from JSON."""
-    with HISTORY_FILE.open() as f:
-        data: dict[str, Any] = json.load(f)
-    return list(data["history"])
+    return ninesig_history_to_dicts()
 
 
 def build_allocation_chart(
@@ -44,18 +43,17 @@ def build_allocation_chart(
     history = history or load_history()
 
     dates = [date.fromisoformat(h["date"]) for h in history]
-    tqqq_pct = [
-        100 * h["tqqq_value"] / (h["tqqq_value"] + h["agg_value"]) for h in history
-    ]
-    agg_pct = [100 - p for p in tqqq_pct]
+    tqqq_pct = [100 * float(h["tqqq_allocation"]) for h in history]
+    agg_pct = [100 * float(h["agg_allocation"]) for h in history]
 
     # Hover text gives the dollar context, not just %
     hover_tqqq = [
         f"<b>{d.isoformat()}</b><br>"
-        f"TQQQ: ${h['tqqq_value']:,.0f} ({tp:.1f}%)<br>"
-        f"AGG:  ${h['agg_value']:,.0f} ({100-tp:.1f}%)<br>"
-        f"TQQQ price: ${h['tqqq_price']:.2f}"
-        + (f"<br><i>{h['annotation']}</i>" if h["annotation"] else "")
+        f"Portfolio: ${h['portfolio_value']:,.0f}<br>"
+        f"TQQQ: {tp:.1f}%<br>"
+        f"AGG:  {100-tp:.1f}%<br>"
+        f"Action: {h['action']}"
+        + (f"<br><i>{h['notes']}</i>" if h["notes"] else "")
         for d, h, tp in zip(dates, history, tqqq_pct, strict=True)
     ]
 
@@ -89,9 +87,7 @@ def build_allocation_chart(
     # Mark notable events directly on the chart (no separate legend block)
     annotations: list[dict[str, Any]] = []
     for d, h, tp in zip(dates, history, tqqq_pct, strict=True):
-        if not h["annotation"]:
-            continue
-        if "BASE RESET" in h["annotation"]:
+        if h["action_type"] == "reset_60_40":
             annotations.append(dict(
                 x=d, y=tp, xref="x", yref="y",
                 text="◆ Base reset", showarrow=True, arrowhead=0,
@@ -100,7 +96,7 @@ def build_allocation_chart(
                 bgcolor=COLORS["panel_bg"], bordercolor=COLORS["highlight"],
                 borderwidth=1, borderpad=2,
             ))
-        elif "30 Down activated" in h["annotation"] or "Covid crash" in h["annotation"]:
+        elif h["action_type"] == "buy_tqqq_30_down":
             annotations.append(dict(
                 x=d, y=tp, xref="x", yref="y",
                 text="▼ 30 Down begins", showarrow=True, arrowhead=0,
@@ -146,8 +142,12 @@ def build_dollar_balance_chart(
     history = history or load_history()
 
     dates = [date.fromisoformat(h["date"]) for h in history]
-    tqqq_vals = [h["tqqq_value"] for h in history]
-    agg_vals = [h["agg_value"] for h in history]
+    tqqq_vals = [
+        float(h["portfolio_value"]) * float(h["tqqq_allocation"]) for h in history
+    ]
+    agg_vals = [
+        float(h["portfolio_value"]) * float(h["agg_allocation"]) for h in history
+    ]
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -187,17 +187,8 @@ def build_dollar_balance_chart(
 
 
 def derive_current_shares(latest: dict[str, Any]) -> tuple[float, float]:
-    """Back out TQQQ + AGG share counts from the latest published balances.
-
-    Uses the published quarter-action TQQQ price as the divisor for TQQQ shares.
-    AGG shares come from balance / typical AGG price (~$99). Approximate but
-    within rounding error.
-    """
-    tqqq_shares = latest["tqqq_value"] / latest["tqqq_price"]
-    # AGG price isn't published per quarter; use $99 as a stable proxy
-    # (AGG has traded $94-$118 over the history, mostly $96-$102)
-    agg_shares = latest["agg_value"] / 99.0
-    return tqqq_shares, agg_shares
+    """Share counts are not part of the normalized history JSON."""
+    raise ValueError("Normalized 9Sig history does not include share counts or fill prices")
 
 
 def write_standalone_html(
@@ -226,31 +217,14 @@ def write_standalone_html(
     )
 
     latest = history[-1]
-    snapshot_tqqq = latest["tqqq_value"]
-    snapshot_agg = latest["agg_value"]
-    snapshot_total = snapshot_tqqq + snapshot_agg
-    snapshot_tqqq_pct = 100 * snapshot_tqqq / snapshot_total
+    snapshot_total = float(latest["portfolio_value"])
+    snapshot_tqqq_pct = 100 * float(latest["tqqq_allocation"])
     last_date = latest["date"]
 
-    # Live re-pricing
-    tqqq_shares, agg_shares = derive_current_shares(latest)
+    # The normalized history has portfolio value + allocation, not share counts,
+    # so live re-pricing remains the job of the main dashboard panel.
     live_block = ""
-    if current_tqqq_price is not None:
-        live_tqqq = tqqq_shares * current_tqqq_price
-        live_agg = agg_shares * current_agg_price
-        live_total = live_tqqq + live_agg
-        live_tqqq_pct = 100 * live_tqqq / live_total
-        live_block = f"""
-  <div class="kpi" style="border-left: 3px solid {COLORS['highlight']}">
-    <div class="kpi-label">Live TQQQ allocation</div>
-    <div class="kpi-value">{live_tqqq_pct:.1f}%</div>
-    <div style="font-size:0.78rem;color:{COLORS['text_muted']};margin-top:0.25rem">
-      at TQQQ ${current_tqqq_price:.2f} / AGG ${current_agg_price:.2f}
-    </div>
-  </div>"""
-        current_tqqq_pct = live_tqqq_pct
-    else:
-        current_tqqq_pct = snapshot_tqqq_pct
+    current_tqqq_pct = snapshot_tqqq_pct
 
     body = f"""<!DOCTYPE html>
 <html lang="en">
