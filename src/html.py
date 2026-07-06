@@ -1330,7 +1330,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       </div>
       <p class="ninesig-history-source">
         Source: 9Sig History PDF, quarterly post-action balances. Portfolio value = TQQQ + AGG + cash.
-        <span id="ninesig-simulation-source-note" hidden>New Plan Simulation uses Yahoo adjusted close for TQQQ and AGG, so splits and distributions are embedded. The 100% intra-quarter spike reset is unsupported/not modeled because this view uses quarterly adjusted closes.</span>
+        <span id="ninesig-simulation-source-note" hidden>New Plan Simulation uses Yahoo adjusted close for TQQQ and AGG, so splits and distributions are embedded. Normal buy/sell actions trade to the 9% signal target; 60/40 applies only to reset actions. The 100% intra-quarter spike reset is unsupported/not modeled because this view uses quarterly adjusted closes.</span>
       </p>
     </div>
 
@@ -1845,17 +1845,27 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
 
         if (tqqqValue < signalTarget - epsilon) {{
           const shortfall = signalTarget - tqqqValue;
-          const buyingPower = aggValue * 0.90;
-          const amountToMove = Math.min(shortfall, buyingPower);
-          aggValue -= amountToMove;
-          tqqqValue += amountToMove;
-          if (amountToMove < shortfall - epsilon) {{
+          if (shortfall >= aggValue - epsilon && !thirtyDownActive) {{
+            const portfolioValue = tqqqValue + aggValue;
+            tqqqValue = portfolioValue * 0.60;
+            aggValue = portfolioValue * 0.40;
             signalTarget = tqqqValue;
-            actionType = 'buy_tqqq_limited';
-            actionSummary = 'Bought ' + fmtUsdFull(amountToMove) + ' TQQQ; AGG buying-power throttle limited the buy, so the signal target was reset to actual TQQQ value.';
+            postThirtyDownAwaitingReset = false;
+            actionType = 'reset_60_40';
+            actionSummary = 'Reset to 60/40 because the buy signal would have used all AGG.';
           }} else {{
-            actionType = 'buy_tqqq';
-            actionSummary = 'Bought ' + fmtUsdFull(amountToMove) + ' TQQQ to restore the signal target.';
+            const buyingPower = aggValue * 0.90;
+            const amountToMove = Math.min(shortfall, buyingPower);
+            aggValue -= amountToMove;
+            tqqqValue += amountToMove;
+            if (amountToMove < shortfall - epsilon) {{
+              signalTarget = tqqqValue;
+              actionType = 'buy_tqqq_limited';
+              actionSummary = 'Bought ' + fmtUsdFull(amountToMove) + ' TQQQ; AGG buying-power throttle limited the buy, so the signal target was reset to actual TQQQ value.';
+            }} else {{
+              actionType = 'buy_tqqq';
+              actionSummary = 'Bought ' + fmtUsdFull(amountToMove) + ' TQQQ to restore the signal target.';
+            }}
           }}
         }} else if (tqqqValue > signalTarget + epsilon) {{
           const surplus = tqqqValue - signalTarget;

@@ -230,20 +230,29 @@ def simulate_ninesig_new_plan(
 
         if tqqq_value < signal_target:
             shortfall = signal_target - tqqq_value
-            buying_power = agg_value * 0.90 if apply_buying_power_throttle else agg_value
-            amount_to_move = min(shortfall, buying_power)
-            agg_value -= amount_to_move
-            tqqq_value += amount_to_move
-            if amount_to_move < shortfall:
+            if shortfall >= agg_value and not thirty_down_active:
+                portfolio_value = tqqq_value + agg_value
+                tqqq_value = portfolio_value * 0.60
+                agg_value = portfolio_value * 0.40
                 signal_target = tqqq_value
-                action_type = "buy_tqqq_limited"
-                action_summary = (
-                    f"Bought ${amount_to_move:,.0f} TQQQ; AGG buying-power throttle limited the buy, "
-                    "so the signal target was reset to actual TQQQ value."
-                )
+                post_thirty_down_awaiting_reset = False
+                action_type = "reset_60_40"
+                action_summary = "Reset to 60/40 because the buy signal would have used all AGG."
             else:
-                action_type = "buy_tqqq"
-                action_summary = f"Bought ${amount_to_move:,.0f} TQQQ to restore the signal target."
+                buying_power = agg_value * 0.90 if apply_buying_power_throttle else agg_value
+                amount_to_move = min(shortfall, buying_power)
+                agg_value -= amount_to_move
+                tqqq_value += amount_to_move
+                if amount_to_move < shortfall:
+                    signal_target = tqqq_value
+                    action_type = "buy_tqqq_limited"
+                    action_summary = (
+                        f"Bought ${amount_to_move:,.0f} TQQQ; AGG buying-power throttle limited the buy, "
+                        "so the signal target was reset to actual TQQQ value."
+                    )
+                else:
+                    action_type = "buy_tqqq"
+                    action_summary = f"Bought ${amount_to_move:,.0f} TQQQ to restore the signal target."
         elif tqqq_value > signal_target:
             surplus = tqqq_value - signal_target
             if thirty_down_active and skipped_sell_signals < 2:

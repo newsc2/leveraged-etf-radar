@@ -110,6 +110,36 @@ def test_thirty_down_skips_two_sell_signals_then_resets_to_60_40() -> None:
     assert rows[-1].aggAllocation == pytest.approx(0.40)
 
 
+def test_buy_signal_that_would_zero_bonds_resets_to_60_40_when_not_thirty_down() -> None:
+    quarters = [
+        _quarter("2024-03-29", 100.0, agg=100.0),
+        _quarter("2024-06-28", 80.0, agg=1.0),
+    ]
+
+    rows = simulate_ninesig_new_plan(quarters, "2024-01-01", 1_000)
+
+    assert rows[1].actionType == "reset_60_40"
+    assert rows[1].tqqqAllocation == pytest.approx(0.60)
+    assert rows[1].aggAllocation == pytest.approx(0.40)
+    assert rows[1].signalTarget == pytest.approx(rows[1].tqqqValue)
+    assert rows[1].thirtyDownActive is False
+
+
+def test_thirty_down_overrides_bond_zero_reset() -> None:
+    quarters = [
+        _quarter("2024-03-29", 100.0, agg=100.0),
+        _quarter("2024-06-28", 20.0, agg=100.0),
+    ]
+
+    rows = simulate_ninesig_new_plan(quarters, "2024-01-01", 1_000)
+
+    assert rows[1].actionType == "buy_tqqq_limited"
+    assert rows[1].tqqqAllocation > 0.60
+    assert rows[1].aggAllocation < 0.40
+    assert rows[1].thirtyDownActive is True
+    assert rows[1].signalTarget == pytest.approx(rows[1].tqqqValue)
+
+
 def test_limited_buy_resets_target_and_does_not_retrigger_active_thirty_down() -> None:
     quarters = [
         _quarter("2024-03-29", 100.0),
