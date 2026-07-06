@@ -533,7 +533,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     }}
     .ninesig-mode-panel[hidden] {{ display: none; }}
     .ninesig-scenario-bar {{
-      display: grid; grid-template-columns: minmax(190px, 260px) minmax(170px, 240px) auto;
+      display: grid; grid-template-columns: minmax(150px, 210px) minmax(150px, 210px) minmax(170px, 240px) auto;
       gap: 10px; align-items: end; margin: 16px 0 18px;
       background: {panel_bg}; border-left: 3px solid {accent};
       padding: 14px 16px;
@@ -1253,7 +1253,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       <h3 class="section-heading">9Sig History</h3>
       <p class="section-desc">
         Jason Kelly's published quarterly 9Sig history is a read-only reference. New Plan Simulation
-        starts a fresh independent 60/40 plan from the selected date and capital.
+        starts a fresh independent 60/40 plan across the selected quarter range and capital.
       </p>
 
       <div class="ninesig-mode-toggle" aria-label="9Sig view mode">
@@ -1266,6 +1266,10 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           <label class="ninesig-field" for="ninesig-sim-start-quarter">
             <span>Start Quarter</span>
             <select id="ninesig-sim-start-quarter"></select>
+          </label>
+          <label class="ninesig-field" for="ninesig-sim-end-quarter">
+            <span>End Quarter</span>
+            <select id="ninesig-sim-end-quarter"></select>
           </label>
           <label class="ninesig-field" for="ninesig-sim-start-value">
             <span>Starting Capital</span>
@@ -1742,6 +1746,19 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       return row ? row.date : lastAvailableNineSigStartDate();
     }}
 
+    function lastNineSigQuarterOnOrBefore(iso) {{
+      const lastDate = lastAvailableNineSigStartDate();
+      if (!lastDate) return '';
+      const endDate = clampNineSigStartDate(iso || lastDate);
+      let selected = NINESIG_ADJUSTED_QUARTERS[0].date;
+      for (let i = 0; i < NINESIG_ADJUSTED_QUARTERS.length; i += 1) {{
+        if (NINESIG_ADJUSTED_QUARTERS[i].date <= endDate) {{
+          selected = NINESIG_ADJUSTED_QUARTERS[i].date;
+        }}
+      }}
+      return selected;
+    }}
+
     function defaultNineSigSimulationStartDate() {{
       if (NINESIG_HISTORY.length && NINESIG_HISTORY[0].date) {{
         return firstNineSigQuarterOnOrAfter(NINESIG_HISTORY[0].date);
@@ -1749,17 +1766,27 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       return firstAvailableNineSigStartDate();
     }}
 
+    function defaultNineSigSimulationEndDate() {{
+      return lastAvailableNineSigStartDate();
+    }}
+
     function readNineSigSimulationInputs() {{
       const quarterSelect = document.getElementById('ninesig-sim-start-quarter');
+      const endSelect = document.getElementById('ninesig-sim-end-quarter');
       const valueInput = document.getElementById('ninesig-sim-start-value');
       const startDate = firstNineSigQuarterOnOrAfter(
         quarterSelect ? quarterSelect.value : defaultNineSigSimulationStartDate()
       );
+      let endDate = lastNineSigQuarterOnOrBefore(
+        endSelect ? endSelect.value : defaultNineSigSimulationEndDate()
+      );
+      if (startDate && endDate && endDate < startDate) endDate = startDate;
+      if (endSelect && endDate && endSelect.value !== endDate) endSelect.value = endDate;
       const rawValue = valueInput ? parseFloat(valueInput.value) : DEFAULT_NINESIG_SIM_START_VALUE;
       const startingCapital = Number.isFinite(rawValue) && rawValue > 0
         ? rawValue
         : DEFAULT_NINESIG_SIM_START_VALUE;
-      return {{ startDate, startingCapital }};
+      return {{ startDate, endDate, startingCapital }};
     }}
 
     function priorTwoYearNineSigHigh(idx) {{
@@ -1808,6 +1835,14 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         return row.date >= inputs.startDate;
       }});
       if (startIndex < 0) return [];
+      let endIndex = NINESIG_ADJUSTED_QUARTERS.length - 1;
+      if (inputs.endDate) {{
+        endIndex = startIndex;
+        for (let i = 0; i < NINESIG_ADJUSTED_QUARTERS.length; i += 1) {{
+          if (NINESIG_ADJUSTED_QUARTERS[i].date <= inputs.endDate) endIndex = i;
+        }}
+        if (endIndex < startIndex) endIndex = startIndex;
+      }}
 
       const rows = [];
       const initial = NINESIG_ADJUSTED_QUARTERS[startIndex];
@@ -1825,7 +1860,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       ));
       let previousPortfolioValue = rows[rows.length - 1].portfolioValue;
 
-      for (let idx = startIndex + 1; idx < NINESIG_ADJUSTED_QUARTERS.length; idx += 1) {{
+      for (let idx = startIndex + 1; idx <= endIndex; idx += 1) {{
         const priceRow = NINESIG_ADJUSTED_QUARTERS[idx];
         const priorRow = rows[rows.length - 1];
         tqqqValue = priorRow.tqqqShares * priceRow.tqqq_adjusted_close;
@@ -1932,12 +1967,12 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           ? 'Active (' + latest.skippedSellSignals + '/2 sells skipped)'
           : 'Inactive';
         host.innerHTML = [
-          card('Latest portfolio value', fmtUsdFull(latest.portfolioValue), latest.quarter + ' · ' + fmtIsoDate(latest.rebalanceDate)),
+          card('Ending portfolio value', fmtUsdFull(latest.portfolioValue), latest.quarter),
           card('CAGR', fmtQoq(cagr), first.quarter + ' → ' + latest.quarter, cagr != null && cagr >= 0 ? 'pos' : 'neg'),
           card('Max drawdown', fmtQoq(dd), 'Peak-to-trough portfolio value', 'neg'),
           card('Current allocation', fmtAlloc(latest.tqqqAllocation) + ' / ' + fmtAlloc(latest.aggAllocation), 'TQQQ / AGG'),
           card('30 Down state', state, 'Sell skips reset when a fresh 30 Down triggers'),
-          card('Start', fmtUsdFull(first.portfolioValue), fmtIsoDate(first.rebalanceDate) + ' · fresh 60/40'),
+          card('Scenario', fmtUsdFull(first.portfolioValue), first.quarter + ' → ' + latest.quarter + ' · fresh 60/40'),
         ].join('');
         return;
       }}
@@ -2233,8 +2268,28 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
 
     function wireNineSigHistoryControls() {{
       const quarterSelect = document.getElementById('ninesig-sim-start-quarter');
+      const endSelect = document.getElementById('ninesig-sim-end-quarter');
       const valueInput = document.getElementById('ninesig-sim-start-value');
       const reset = document.getElementById('ninesig-sim-reset');
+
+      function syncEndQuarterOptions() {{
+        if (!quarterSelect || !endSelect) return;
+        const startDate = firstNineSigQuarterOnOrAfter(
+          quarterSelect.value || defaultNineSigSimulationStartDate()
+        );
+        const oldEnd = endSelect.value || defaultNineSigSimulationEndDate();
+        endSelect.innerHTML = NINESIG_ADJUSTED_QUARTERS
+          .filter(function(row) {{ return !startDate || row.date >= startDate; }})
+          .map(function(row) {{
+            return '<option value="' + row.date + '">' + escapeHtml(row.quarter) + '</option>';
+          }}).join('');
+        if (oldEnd && (!startDate || oldEnd >= startDate)) {{
+          endSelect.value = oldEnd;
+        }} else {{
+          endSelect.value = startDate;
+        }}
+      }}
+
       document.querySelectorAll('[data-ninesig-mode]').forEach(function(button) {{
         button.addEventListener('click', function() {{
           ninesigMode = button.dataset.ninesigMode || 'published';
@@ -2244,10 +2299,19 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
 
       if (quarterSelect) {{
         quarterSelect.innerHTML = NINESIG_ADJUSTED_QUARTERS.map(function(row) {{
-          return '<option value="' + row.date + '">' + escapeHtml(row.quarter + ' · ' + fmtIsoDate(row.date)) + '</option>';
+          return '<option value="' + row.date + '">' + escapeHtml(row.quarter) + '</option>';
         }}).join('');
         quarterSelect.value = defaultNineSigSimulationStartDate();
-        quarterSelect.addEventListener('change', renderNineSigHistory);
+        syncEndQuarterOptions();
+        quarterSelect.addEventListener('change', function() {{
+          syncEndQuarterOptions();
+          renderNineSigHistory();
+        }});
+      }}
+      if (endSelect) {{
+        if (!endSelect.options.length) syncEndQuarterOptions();
+        endSelect.value = defaultNineSigSimulationEndDate();
+        endSelect.addEventListener('change', renderNineSigHistory);
       }}
       if (valueInput) {{
         valueInput.value = Math.round(DEFAULT_NINESIG_SIM_START_VALUE);
@@ -2256,6 +2320,8 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       if (reset) {{
         reset.addEventListener('click', function() {{
           if (quarterSelect) quarterSelect.value = defaultNineSigSimulationStartDate();
+          syncEndQuarterOptions();
+          if (endSelect) endSelect.value = defaultNineSigSimulationEndDate();
           if (valueInput) valueInput.value = Math.round(DEFAULT_NINESIG_SIM_START_VALUE);
           renderNineSigHistory();
         }});

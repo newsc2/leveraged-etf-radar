@@ -172,6 +172,7 @@ def simulate_ninesig_new_plan(
     start_date: str,
     starting_capital: float,
     *,
+    end_date: str | None = None,
     apply_buying_power_throttle: bool = True,
 ) -> list[NineSigSimulationRow]:
     """Simulate a fresh independent 9Sig plan from adjusted quarterly closes."""
@@ -184,6 +185,15 @@ def simulate_ninesig_new_plan(
     )
     if start_index is None:
         return []
+    end_index = len(quarters) - 1
+    if end_date is not None:
+        end = _parse_iso_date(end_date)
+        end_candidates = [
+            idx for idx, quarter in enumerate(quarters) if _parse_iso_date(quarter.date) <= end
+        ]
+        end_index = end_candidates[-1] if end_candidates else start_index
+        if end_index < start_index:
+            end_index = start_index
 
     rows: list[NineSigSimulationRow] = []
     initial = quarters[start_index]
@@ -209,7 +219,7 @@ def simulate_ninesig_new_plan(
     )
     previous_portfolio_value = rows[-1].portfolioValue
 
-    for idx in range(start_index + 1, len(quarters)):
+    for idx in range(start_index + 1, end_index + 1):
         quarter = quarters[idx]
         tqqq_value = rows[-1].tqqqShares * quarter.tqqq_adjusted_close
         agg_value = rows[-1].aggShares * quarter.agg_adjusted_close

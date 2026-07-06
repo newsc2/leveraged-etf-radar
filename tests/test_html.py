@@ -184,9 +184,12 @@ class TestGenerateHtml:
         assert "Published History" in html
         assert "New Plan Simulation" in html
         assert "Start Quarter" in html
+        assert "End Quarter" in html
         assert 'id="ninesig-sim-start-quarter"' in html
+        assert 'id="ninesig-sim-end-quarter"' in html
         assert 'id="ninesig-sim-start-date"' not in html
         assert "Start fresh at 60/40." in html
+        assert "Ending portfolio value" in html
         assert "rebasing the published" not in html
         assert '"nine_sig_adjusted_quarters"' in html
 

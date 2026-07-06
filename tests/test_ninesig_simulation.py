@@ -88,6 +88,41 @@ def test_simulation_uses_adjusted_close_for_initial_share_counts() -> None:
     assert rows[0].aggShares == pytest.approx(400_000 / 80.0)
 
 
+def test_simulation_can_end_at_selected_quarter() -> None:
+    quarters = [
+        _quarter("2024-03-29", 100.0),
+        _quarter("2024-06-28", 110.0),
+        _quarter("2024-09-30", 120.0),
+        _quarter("2024-12-31", 130.0),
+    ]
+
+    rows = simulate_ninesig_new_plan(
+        quarters,
+        "2024-01-01",
+        1_000,
+        end_date="2024-09-30",
+    )
+
+    assert [row.quarter for row in rows] == ["2024 Q1", "2024 Q2", "2024 Q3"]
+
+
+def test_simulation_end_before_start_returns_initial_quarter_only() -> None:
+    quarters = [
+        _quarter("2024-03-29", 100.0),
+        _quarter("2024-06-28", 110.0),
+    ]
+
+    rows = simulate_ninesig_new_plan(
+        quarters,
+        "2024-06-01",
+        1_000,
+        end_date="2024-03-29",
+    )
+
+    assert [row.quarter for row in rows] == ["2024 Q2"]
+    assert rows[0].actionType == "initial"
+
+
 def test_thirty_down_skips_two_sell_signals_then_resets_to_60_40() -> None:
     quarters = [
         _quarter("2024-03-29", 100.0),
