@@ -25,9 +25,9 @@ YAHOO_HEADERS: dict[str, str] = {
 CACHE_TTL_HOURS: int = 12
 
 
-def _cache_path(symbol: str) -> Path:
+def _cache_path(symbol: str, suffix: str = "") -> Path:
     safe: str = symbol.replace("/", "_").replace("=", "_").replace("^", "_")
-    return CACHE_DIR / f"{safe}.json"
+    return CACHE_DIR / f"{safe}{suffix}.json"
 
 
 def _cache_is_fresh(path: Path, ttl_hours: int = CACHE_TTL_HOURS) -> bool:
@@ -49,6 +49,33 @@ def _parse_chart_payload(payload: dict[str, Any]) -> pd.Series:
     records: list[tuple[datetime, float]] = [
         (datetime.fromtimestamp(ts), c)
         for ts, c in zip(timestamps, closes)
+        if c is not None
+    ]
+    if not records:
+        return pd.Series(dtype=float)
+    df: pd.DataFrame = pd.DataFrame(records, columns=["date", "value"])
+    df["date"] = pd.to_datetime(df["date"].dt.date)
+    return df.set_index("date")["value"].astype(float)
+
+
+def _parse_adjusted_chart_payload(payload: dict[str, Any]) -> pd.Series:
+    """Extract Yahoo adjusted close prices.
+
+    Adjusted close is required for total-return portfolio simulation because it
+    bakes in splits and distributions. If Yahoo omits it, return empty rather
+    than silently falling back to raw close.
+    """
+    chart_result: list[dict[str, Any]] = payload.get("chart", {}).get("result", []) or []
+    if not chart_result:
+        return pd.Series(dtype=float)
+    timestamps: list[int] = chart_result[0].get("timestamp", []) or []
+    adjclose: list[dict[str, Any]] = chart_result[0].get("indicators", {}).get("adjclose", []) or []
+    if not adjclose:
+        return pd.Series(dtype=float)
+    adjusted_closes: list[float | None] = adjclose[0].get("adjclose", []) or []
+    records: list[tuple[datetime, float]] = [
+        (datetime.fromtimestamp(ts), c)
+        for ts, c in zip(timestamps, adjusted_closes)
         if c is not None
     ]
     if not records:
@@ -123,6 +150,8 @@ def fetch_yahoo_series(
         "period1": start_time,
         "period2": end_time,
         "interval": "1d",
+        "events": "div,splits",
+        "includeAdjustedClose": "true",
     }
     try:
         resp: requests.Response = requests.get(url, params=params, headers=YAHOO_HEADERS, timeout=30)
@@ -137,6 +166,52 @@ def fetch_yahoo_series(
         return _parse_chart_payload(payload)
     except Exception as e:
         logger.warning(f"Yahoo fetch failed for {symbol}: {e}")
+        return pd.Series(dtype=float)
+
+
+def fetch_yahoo_adjusted_series(
+    symbol: str,
+    years_back: int = 11,
+    use_cache: bool = True,
+) -> pd.Series:
+    """Fetch daily adjusted close prices from Yahoo Finance chart API.
+
+    This uses a separate cache file from raw close so a short AGG fetch for the
+    live panel cannot accidentally truncate the 9Sig simulation history.
+    """
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cpath = _cache_path(symbol, suffix=".adjusted")
+
+    if use_cache and _cache_is_fresh(cpath):
+        try:
+            with cpath.open() as fh:
+                return _parse_adjusted_chart_payload(json.load(fh))
+        except Exception as e:
+            logger.warning(f"Adjusted cache read failed for {symbol}: {e}")
+
+    end_time: int = int(datetime.now().timestamp())
+    start_time: int = int((datetime.now() - timedelta(days=years_back * 365)).timestamp())
+    url: str = YAHOO_CHART_URL.format(symbol=symbol)
+    params: dict[str, str | int] = {
+        "period1": start_time,
+        "period2": end_time,
+        "interval": "1d",
+        "events": "div,splits",
+        "includeAdjustedClose": "true",
+    }
+    try:
+        resp: requests.Response = requests.get(url, params=params, headers=YAHOO_HEADERS, timeout=30)
+        resp.raise_for_status()
+        payload: dict[str, Any] = resp.json()
+        if use_cache:
+            try:
+                with cpath.open("w") as fh:
+                    json.dump(payload, fh)
+            except Exception as e:
+                logger.warning(f"Adjusted cache write failed for {symbol}: {e}")
+        return _parse_adjusted_chart_payload(payload)
+    except Exception as e:
+        logger.warning(f"Yahoo adjusted fetch failed for {symbol}: {e}")
         return pd.Series(dtype=float)
 
 

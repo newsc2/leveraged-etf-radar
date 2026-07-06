@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 from src.config import DIST_DIR
-from src.data import fetch_many, fetch_yahoo_series, fetch_yahoo_volume
+from src.data import fetch_many, fetch_yahoo_adjusted_series, fetch_yahoo_series, fetch_yahoo_volume
 from src.holdings import resolve_all
 from src.html import generate_html
 from src.metrics import compute_fund_metrics
@@ -133,6 +133,14 @@ def main() -> None:
     except Exception as e:
         logger.warning(f"  9Sig panel: build failed ({e}); skipping")
 
+    logger.info("Fetching 9Sig adjusted close series...")
+    nine_sig_adjusted_data = {
+        "TQQQ": fetch_yahoo_adjusted_series("TQQQ", years_back=11, use_cache=use_cache),
+        "AGG": fetch_yahoo_adjusted_series("AGG", years_back=11, use_cache=use_cache),
+    }
+    nine_sig_adjusted_ok = sum(1 for s in nine_sig_adjusted_data.values() if not s.empty)
+    logger.info(f"  9Sig adjusted series: {nine_sig_adjusted_ok}/2 available")
+
     logger.info("Generating HTML...")
     html = generate_html(
         funds=funds, metrics=metrics,
@@ -140,6 +148,7 @@ def main() -> None:
         holdings=holdings, summary_html=summary_html,
         signals=signals, sig_lenses=sig_lenses,
         nine_sig_panel=nine_sig_html,
+        nine_sig_adjusted_data=nine_sig_adjusted_data,
     )
 
     out_dir = Path(args.output)

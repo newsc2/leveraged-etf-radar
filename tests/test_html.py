@@ -178,3 +178,33 @@ class TestGenerateHtml:
         assert '"prices"' in html
         assert '"holdings"' in html
         assert '"addv"' in html  # avg daily dollar volume in metrics payload
+
+    def test_9sig_has_published_and_new_plan_modes(self) -> None:
+        html = self._build([_fund("TQQQ")], {"TQQQ": _metrics("TQQQ")})
+        assert "Published History" in html
+        assert "New Plan Simulation" in html
+        assert "Start fresh at 60/40." in html
+        assert "rebasing the published" not in html
+        assert '"nine_sig_adjusted_quarters"' in html
+
+    def test_9sig_adjusted_quarters_embedded_when_provided(self) -> None:
+        idx = pd.to_datetime(["2024-03-29", "2024-06-28"])
+        tqqq = pd.Series([10.0, 12.0], index=idx)
+        agg = pd.Series([100.0, 101.0], index=idx)
+        html = generate_html(
+            funds=[_fund("TQQQ")],
+            metrics={"TQQQ": _metrics("TQQQ")},
+            fund_data={"TQQQ": tqqq},
+            proxy_data={"SPY": tqqq},
+            holdings={
+                "TQQQ": Holdings(
+                    ticker="TQQQ", confidence="manual_target_only",
+                    fetched_at=datetime.now().isoformat(),
+                    components=[Component("X Index", 100.0, "equity")],
+                )
+            },
+            nine_sig_adjusted_data={"TQQQ": tqqq, "AGG": agg},
+        )
+
+        assert '"tqqq_adjusted_close":10.0' in html
+        assert '"agg_adjusted_close":100.0' in html

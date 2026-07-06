@@ -8,7 +8,12 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from src.data import _parse_chart_payload, fetch_yahoo_series
+from src.data import (
+    _parse_adjusted_chart_payload,
+    _parse_chart_payload,
+    fetch_yahoo_adjusted_series,
+    fetch_yahoo_series,
+)
 
 
 def _payload(timestamps: list[int], closes: list[float | None]) -> dict:
@@ -17,6 +22,20 @@ def _payload(timestamps: list[int], closes: list[float | None]) -> dict:
             "result": [{
                 "timestamp": timestamps,
                 "indicators": {"quote": [{"close": closes}]},
+            }]
+        }
+    }
+
+
+def _adjusted_payload(timestamps: list[int], adjusted_closes: list[float | None]) -> dict:
+    return {
+        "chart": {
+            "result": [{
+                "timestamp": timestamps,
+                "indicators": {
+                    "quote": [{"close": [999.0 for _ in timestamps]}],
+                    "adjclose": [{"adjclose": adjusted_closes}],
+                },
             }]
         }
     }
@@ -39,6 +58,16 @@ class TestParseChartPayload:
     def test_empty_when_all_none(self) -> None:
         s = _parse_chart_payload(_payload([1, 2], [None, None]))
         assert s.empty
+
+
+class TestParseAdjustedChartPayload:
+    def test_returns_adjusted_close_not_raw_close(self) -> None:
+        s = _parse_adjusted_chart_payload(_adjusted_payload([1704067200], [88.5]))
+        assert len(s) == 1
+        assert s.iloc[0] == pytest.approx(88.5)
+
+    def test_empty_without_adjusted_close(self) -> None:
+        assert _parse_adjusted_chart_payload(_payload([1704067200], [100.0])).empty
 
 
 class TestFetchYahooSeries:
@@ -72,3 +101,20 @@ class TestFetchYahooSeries:
         mock_get.side_effect = Exception("Network down")
         s = fetch_yahoo_series("BAZ", use_cache=False)
         assert s.empty
+
+
+class TestFetchYahooAdjustedSeries:
+    @patch("src.data.requests.get")
+    def test_uses_separate_adjusted_cache(self, mock_get: MagicMock, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.setattr("src.data.CACHE_DIR", tmp_path)
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = _adjusted_payload([1704067200], [42.0])
+        mock_resp.raise_for_status.return_value = None
+        mock_get.return_value = mock_resp
+
+        s = fetch_yahoo_adjusted_series("AGG", years_back=11)
+
+        assert len(s) == 1
+        assert s.iloc[0] == pytest.approx(42.0)
+        assert (tmp_path / "AGG.adjusted.json").exists()
+        assert not (tmp_path / "AGG.json").exists()

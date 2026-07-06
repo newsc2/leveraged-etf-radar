@@ -32,6 +32,7 @@ from src.config import COLORS, LEVERAGE_COLORS
 from src.holdings import Holdings
 from src.metrics import FundMetrics
 from src.ninesig_history import ninesig_history_to_dicts
+from src.ninesig_simulation import build_ninesig_adjusted_quarters, ninesig_adjusted_quarters_to_dicts
 from src.sig_lens import SigLens, sig_lens_to_dict
 from src.signals import FundSignals, signals_to_dict
 from src.universe import Fund
@@ -191,6 +192,7 @@ def build_radar_json(
     holdings: dict[str, Holdings],
     signals: dict[str, FundSignals] | None = None,
     sig_lenses: dict[str, SigLens] | None = None,
+    nine_sig_adjusted_data: dict[str, pd.Series] | None = None,
 ) -> str:
     # ── Shared timestamp axis (decimated) ──
     all_dates: set[pd.Timestamp] = set()
@@ -273,6 +275,13 @@ def build_radar_json(
     sig_lenses = sig_lenses or {}
     signals_obj = {tk: signals_to_dict(s) for tk, s in signals.items()}
     sig_lens_obj = {tk: sig_lens_to_dict(s) for tk, s in sig_lenses.items()}
+    nine_sig_adjusted_data = nine_sig_adjusted_data or {}
+    nine_sig_adjusted_quarters = ninesig_adjusted_quarters_to_dicts(
+        build_ninesig_adjusted_quarters(
+            nine_sig_adjusted_data.get("TQQQ"),
+            nine_sig_adjusted_data.get("AGG"),
+        )
+    )
 
     payload = {
         "timestamps": timestamps_ms,
@@ -283,6 +292,7 @@ def build_radar_json(
         "signals": signals_obj,
         "sig_lens": sig_lens_obj,
         "nine_sig_history": ninesig_history_to_dicts(),
+        "nine_sig_adjusted_quarters": nine_sig_adjusted_quarters,
     }
     return json.dumps(payload, separators=(",", ":"), default=str)
 
@@ -506,6 +516,22 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       padding-bottom: 28px;
       border-bottom: 1px solid {border};
     }}
+    .ninesig-mode-toggle {{
+      display: inline-flex; gap: 4px; align-items: center;
+      border: 1px solid {border}; background: {panel_bg};
+      padding: 4px; margin: 14px 0 8px;
+    }}
+    .ninesig-mode-toggle button {{
+      border: 0; background: transparent; color: {text_muted};
+      padding: 8px 12px; border-radius: 3px;
+      font: 700 12px 'Inter', system-ui, sans-serif;
+      cursor: pointer;
+    }}
+    .ninesig-mode-toggle button.active {{
+      background: {card_bg}; color: {text};
+      box-shadow: 0 0 0 1px {border};
+    }}
+    .ninesig-mode-panel[hidden] {{ display: none; }}
     .ninesig-scenario-bar {{
       display: grid; grid-template-columns: minmax(190px, 260px) minmax(170px, 240px) auto;
       gap: 10px; align-items: end; margin: 16px 0 18px;
@@ -531,8 +557,13 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       cursor: pointer;
     }}
     .ninesig-history-reset:hover {{ color: {text}; border-color: {accent}; }}
+    .ninesig-history-message {{
+      margin: 14px 0; padding: 12px 14px; border-left: 3px solid {red};
+      background: rgba(204, 50, 50, .08); color: {text}; font-size: 13px;
+    }}
+    .ninesig-history-message[hidden] {{ display: none; }}
     .ninesig-history-kpis {{
-      display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr));
+      display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr));
       gap: 10px; margin-bottom: 24px;
     }}
     .ninesig-history-kpi {{
@@ -543,6 +574,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     .ninesig-history-kpi:nth-child(3) {{ border-left-color: {green}; }}
     .ninesig-history-kpi:nth-child(4) {{ border-left-color: {red}; }}
     .ninesig-history-kpi:nth-child(5) {{ border-left-color: {cat_5}; }}
+    .ninesig-history-kpi:nth-child(6) {{ border-left-color: {highlight}; }}
     .ninesig-history-kpi .label {{
       font-size: 10px; color: {text_light}; text-transform: uppercase;
       letter-spacing: .07em; font-weight: 700; margin-bottom: 5px;
@@ -593,6 +625,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     .ninesig-action-buy {{ background: rgba(42, 134, 54, .12); color: {green}; }}
     .ninesig-action-sell {{ background: rgba(204, 50, 50, .10); color: {red}; }}
     .ninesig-action-no-action {{ background: {bg}; color: {text_light}; border: 1px solid {border}; }}
+    .ninesig-action-skip {{ background: rgba(46, 110, 158, .10); color: {cat_2}; }}
     .ninesig-action-reset {{ background: rgba(233, 178, 55, .17); color: #8a6818; }}
     .ninesig-action-initial {{ background: rgba(46, 110, 158, .13); color: {cat_2}; }}
     .ninesig-history-source {{
@@ -1189,22 +1222,30 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     <div class="section section-anchor ninesig-history-section" id="9sig-history">
       <h3 class="section-heading">9Sig History</h3>
       <p class="section-desc">
-        Chronological post-action 9Sig balances with scenario controls for rebasing the published
-        path to a different starting value or later starting quarter.
+        Jason Kelly's published quarterly 9Sig history is a read-only reference. New Plan Simulation
+        starts a fresh independent 60/40 plan from the selected date and capital.
       </p>
 
-      <div class="ninesig-scenario-bar" aria-label="9Sig scenario controls">
-        <label class="ninesig-field" for="ninesig-history-start-date">
-          <span>Starting Date</span>
-          <select id="ninesig-history-start-date"></select>
-        </label>
-        <label class="ninesig-field" for="ninesig-history-start-value">
-          <span>Starting Value</span>
-          <input id="ninesig-history-start-value" type="number" min="1" step="1000" inputmode="numeric">
-        </label>
-        <button class="ninesig-history-reset" id="ninesig-history-reset" type="button">Reset</button>
+      <div class="ninesig-mode-toggle" aria-label="9Sig view mode">
+        <button type="button" class="active" data-ninesig-mode="published">Published History</button>
+        <button type="button" data-ninesig-mode="simulation">New Plan Simulation</button>
       </div>
 
+      <div class="ninesig-mode-panel" id="ninesig-simulation-panel" hidden>
+        <div class="ninesig-scenario-bar" aria-label="9Sig simulation controls">
+          <label class="ninesig-field" for="ninesig-sim-start-date">
+            <span>Start Date</span>
+            <input id="ninesig-sim-start-date" type="date">
+          </label>
+          <label class="ninesig-field" for="ninesig-sim-start-value">
+            <span>Starting Capital</span>
+            <input id="ninesig-sim-start-value" type="number" min="1" step="1000" inputmode="numeric">
+          </label>
+          <button class="ninesig-history-reset" id="ninesig-sim-reset" type="button">Reset</button>
+        </div>
+      </div>
+
+      <div class="ninesig-history-message" id="ninesig-history-message" hidden></div>
       <div class="ninesig-history-kpis" id="ninesig-history-kpis"></div>
 
       <div class="ninesig-history-chart-grid">
@@ -1212,7 +1253,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           <div class="chart-title-row">
             <span class="accent-bar"></span>
             <h2 class="chart-title">Portfolio value</h2>
-            <p class="chart-subtitle">Rebased to the selected starting value and starting quarter.</p>
+            <p class="chart-subtitle" id="ninesig-value-subtitle">Published quarterly post-action portfolio value.</p>
           </div>
           <div class="ninesig-history-chart-scroll">
             <div id="ninesig-value-chart" class="ninesig-history-chart"></div>
@@ -1222,7 +1263,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           <div class="chart-title-row">
             <span class="accent-bar"></span>
             <h2 class="chart-title">TQQQ / AGG allocation</h2>
-            <p class="chart-subtitle">Post-action allocation at each quarterly action date.</p>
+            <p class="chart-subtitle" id="ninesig-allocation-subtitle">Post-action allocation at each quarterly action date.</p>
           </div>
           <div class="ninesig-history-chart-scroll">
             <div id="ninesig-allocation-chart" class="ninesig-history-chart"></div>
@@ -1232,7 +1273,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           <div class="chart-title-row">
             <span class="accent-bar"></span>
             <h2 class="chart-title">Quarter-over-quarter change</h2>
-            <p class="chart-subtitle">Published QoQ portfolio change, excluding the selected starting row.</p>
+            <p class="chart-subtitle" id="ninesig-qoq-subtitle">Published QoQ portfolio change.</p>
           </div>
           <div class="ninesig-history-chart-scroll">
             <div id="ninesig-qoq-chart" class="ninesig-history-chart"></div>
@@ -1242,7 +1283,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
 
       <div class="table-wrap">
         <table class="ninesig-history-table" id="ninesig-history-table">
-          <thead>
+          <thead id="ninesig-history-head">
             <tr>
               <th>Quarter</th>
               <th>Action Date</th>
@@ -1257,7 +1298,10 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           <tbody id="ninesig-history-body"></tbody>
         </table>
       </div>
-      <p class="ninesig-history-source">Source: 9Sig History PDF, quarterly post-action balances. Portfolio value = TQQQ + AGG + cash.</p>
+      <p class="ninesig-history-source">
+        Source: 9Sig History PDF, quarterly post-action balances. Portfolio value = TQQQ + AGG + cash.
+        <span id="ninesig-simulation-source-note" hidden>New Plan Simulation uses Yahoo adjusted close for TQQQ and AGG, so splits and distributions are embedded. The 100% intra-quarter spike reset is unsupported/not modeled because this view uses quarterly adjusted closes.</span>
+      </p>
     </div>
 
     {filter_bar}
@@ -1605,47 +1649,20 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     }}
 
     // -----------------------------------------------------------
-    // 9Sig history scenario controls
+    // 9Sig published history + independent new-plan simulation
     // -----------------------------------------------------------
     const NINESIG_HISTORY = RADAR.nine_sig_history || [];
-    const DEFAULT_NINESIG_START_VALUE = NINESIG_HISTORY.length
-      ? NINESIG_HISTORY[0].portfolio_value
-      : 0;
-    let ninesigStartValueEdited = false;
+    const NINESIG_ADJUSTED_QUARTERS = RADAR.nine_sig_adjusted_quarters || [];
+    const DEFAULT_NINESIG_SIM_START_VALUE = 1000000;
+    let ninesigMode = 'published';
 
     function nineSigActionClass(type) {{
       if (type === 'initial') return 'ninesig-action-initial';
       if (type === 'reset_60_40') return 'ninesig-action-reset';
       if (type === 'no_action') return 'ninesig-action-no-action';
+      if (type === 'skip_sell_30_down') return 'ninesig-action-skip';
       if (type === 'sell_tqqq') return 'ninesig-action-sell';
       return 'ninesig-action-buy';
-    }}
-
-    function readNineSigScenario() {{
-      const select = document.getElementById('ninesig-history-start-date');
-      const input = document.getElementById('ninesig-history-start-value');
-      const rawIndex = select ? parseInt(select.value, 10) : 0;
-      const startIndex = Number.isFinite(rawIndex)
-        ? Math.max(0, Math.min(rawIndex, NINESIG_HISTORY.length - 1))
-        : 0;
-      const rawValue = input ? parseFloat(input.value) : DEFAULT_NINESIG_START_VALUE;
-      const startValue = Number.isFinite(rawValue) && rawValue > 0
-        ? rawValue
-        : DEFAULT_NINESIG_START_VALUE;
-      return {{ startIndex, startValue }};
-    }}
-
-    function nineSigScenarioRows() {{
-      if (!NINESIG_HISTORY.length) return [];
-      const scenario = readNineSigScenario();
-      const baseRow = NINESIG_HISTORY[scenario.startIndex] || NINESIG_HISTORY[0];
-      const baseValue = baseRow.portfolio_value || 1;
-      return NINESIG_HISTORY.slice(scenario.startIndex).map(function(row, idx) {{
-        return Object.assign({{}}, row, {{
-          scenario_portfolio_value: row.portfolio_value / baseValue * scenario.startValue,
-          scenario_qoq_change: idx === 0 ? null : row.qoq_change,
-        }});
-      }});
     }}
 
     function yearsBetween(startIso, endIso) {{
@@ -1655,7 +1672,190 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       return (end - start) / (365.25 * 86400000);
     }}
 
-    function renderNineSigHistoryKpis(rows) {{
+    function maxNineSigDrawdown(rows) {{
+      let peak = -Infinity;
+      let maxDd = 0;
+      rows.forEach(function(row) {{
+        const value = row.portfolioValue;
+        if (!Number.isFinite(value) || value <= 0) return;
+        peak = Math.max(peak, value);
+        if (peak > 0) maxDd = Math.min(maxDd, value / peak - 1);
+      }});
+      return maxDd;
+    }}
+
+    function firstAvailableNineSigStartDate() {{
+      return NINESIG_ADJUSTED_QUARTERS.length ? NINESIG_ADJUSTED_QUARTERS[0].date : '';
+    }}
+
+    function lastAvailableNineSigStartDate() {{
+      return NINESIG_ADJUSTED_QUARTERS.length
+        ? NINESIG_ADJUSTED_QUARTERS[NINESIG_ADJUSTED_QUARTERS.length - 1].date
+        : '';
+    }}
+
+    function clampNineSigStartDate(iso) {{
+      const first = firstAvailableNineSigStartDate();
+      const last = lastAvailableNineSigStartDate();
+      if (!first || !last) return iso || '';
+      if (!iso || iso < first) return first;
+      if (iso > last) return last;
+      return iso;
+    }}
+
+    function defaultNineSigSimulationStartDate() {{
+      if (NINESIG_HISTORY.length && NINESIG_HISTORY[0].date) {{
+        return clampNineSigStartDate(NINESIG_HISTORY[0].date.slice(0, 4) + '-01-01');
+      }}
+      return firstAvailableNineSigStartDate();
+    }}
+
+    function readNineSigSimulationInputs() {{
+      const dateInput = document.getElementById('ninesig-sim-start-date');
+      const valueInput = document.getElementById('ninesig-sim-start-value');
+      const startDate = clampNineSigStartDate(dateInput ? dateInput.value : defaultNineSigSimulationStartDate());
+      const rawValue = valueInput ? parseFloat(valueInput.value) : DEFAULT_NINESIG_SIM_START_VALUE;
+      const startingCapital = Number.isFinite(rawValue) && rawValue > 0
+        ? rawValue
+        : DEFAULT_NINESIG_SIM_START_VALUE;
+      return {{ startDate, startingCapital }};
+    }}
+
+    function priorTwoYearNineSigHigh(idx) {{
+      const currentMs = Date.parse(NINESIG_ADJUSTED_QUARTERS[idx].date + 'T00:00:00');
+      if (!Number.isFinite(currentMs)) return null;
+      const cutoffMs = currentMs - 731 * 86400000;
+      let high = null;
+      for (let i = 0; i < idx; i += 1) {{
+        const rowMs = Date.parse(NINESIG_ADJUSTED_QUARTERS[i].date + 'T00:00:00');
+        if (!Number.isFinite(rowMs) || rowMs < cutoffMs) continue;
+        const close = NINESIG_ADJUSTED_QUARTERS[i].tqqq_adjusted_close;
+        if (Number.isFinite(close)) high = high === null ? close : Math.max(high, close);
+      }}
+      return high;
+    }}
+
+    function buildNineSigSimulationRow(priceRow, signalTarget, tqqqValue, aggValue, actionType, actionSummary, thirtyDownActive, skippedSellSignals, previousPortfolioValue) {{
+      const tqqqPrice = priceRow.tqqq_adjusted_close;
+      const aggPrice = priceRow.agg_adjusted_close;
+      const portfolioValue = tqqqValue + aggValue;
+      const qoqChange = previousPortfolioValue && previousPortfolioValue > 0
+        ? portfolioValue / previousPortfolioValue - 1
+        : null;
+      return {{
+        quarter: priceRow.quarter,
+        rebalanceDate: priceRow.date,
+        tqqqAdjustedClose: tqqqPrice,
+        aggAdjustedClose: aggPrice,
+        signalTarget: signalTarget,
+        tqqqShares: tqqqPrice > 0 ? tqqqValue / tqqqPrice : 0,
+        aggShares: aggPrice > 0 ? aggValue / aggPrice : 0,
+        tqqqValue: tqqqValue,
+        aggValue: aggValue,
+        portfolioValue: portfolioValue,
+        tqqqAllocation: portfolioValue > 0 ? tqqqValue / portfolioValue : 0,
+        aggAllocation: portfolioValue > 0 ? aggValue / portfolioValue : 0,
+        actionType: actionType,
+        actionSummary: actionSummary,
+        thirtyDownActive: thirtyDownActive,
+        skippedSellSignals: skippedSellSignals,
+        qoqChange: qoqChange,
+      }};
+    }}
+
+    function simulateNineSigNewPlan() {{
+      if (!NINESIG_ADJUSTED_QUARTERS.length) return [];
+      const inputs = readNineSigSimulationInputs();
+      if (!inputs.startDate || inputs.startingCapital <= 0) return [];
+      const startIndex = NINESIG_ADJUSTED_QUARTERS.findIndex(function(row) {{
+        return row.date >= inputs.startDate;
+      }});
+      if (startIndex < 0) return [];
+
+      const rows = [];
+      const initial = NINESIG_ADJUSTED_QUARTERS[startIndex];
+      let tqqqValue = inputs.startingCapital * 0.60;
+      let aggValue = inputs.startingCapital * 0.40;
+      let signalTarget = tqqqValue;
+      let thirtyDownActive = false;
+      let skippedSellSignals = 0;
+      let postThirtyDownAwaitingReset = false;
+
+      rows.push(buildNineSigSimulationRow(
+        initial, signalTarget, tqqqValue, aggValue,
+        'initial', 'Start fresh at 60/40.',
+        thirtyDownActive, skippedSellSignals, null,
+      ));
+      let previousPortfolioValue = rows[rows.length - 1].portfolioValue;
+
+      for (let idx = startIndex + 1; idx < NINESIG_ADJUSTED_QUARTERS.length; idx += 1) {{
+        const priceRow = NINESIG_ADJUSTED_QUARTERS[idx];
+        const priorRow = rows[rows.length - 1];
+        tqqqValue = priorRow.tqqqShares * priceRow.tqqq_adjusted_close;
+        aggValue = priorRow.aggShares * priceRow.agg_adjusted_close;
+        signalTarget *= 1.09;
+
+        const priorHigh = priorTwoYearNineSigHigh(idx);
+        if (priorHigh !== null && priceRow.tqqq_adjusted_close <= priorHigh * 0.70) {{
+          thirtyDownActive = true;
+          skippedSellSignals = 0;
+          postThirtyDownAwaitingReset = false;
+        }}
+
+        let actionType = 'no_action';
+        let actionSummary = 'No trade; TQQQ matched the signal target.';
+        const epsilon = 0.005;
+
+        if (tqqqValue < signalTarget - epsilon) {{
+          const shortfall = signalTarget - tqqqValue;
+          const buyingPower = aggValue * 0.90;
+          const amountToMove = Math.min(shortfall, buyingPower);
+          aggValue -= amountToMove;
+          tqqqValue += amountToMove;
+          if (amountToMove < shortfall - epsilon) {{
+            actionType = 'buy_tqqq_limited';
+            actionSummary = 'Bought ' + fmtUsdFull(amountToMove) + ' TQQQ; AGG buying-power throttle limited the buy.';
+          }} else {{
+            actionType = 'buy_tqqq';
+            actionSummary = 'Bought ' + fmtUsdFull(amountToMove) + ' TQQQ to restore the signal target.';
+          }}
+        }} else if (tqqqValue > signalTarget + epsilon) {{
+          const surplus = tqqqValue - signalTarget;
+          if (thirtyDownActive && skippedSellSignals < 2) {{
+            skippedSellSignals += 1;
+            actionType = 'skip_sell_30_down';
+            actionSummary = 'Skipped sell signal ' + skippedSellSignals + ' of 2 during 30 Down.';
+            if (skippedSellSignals === 2) {{
+              thirtyDownActive = false;
+              postThirtyDownAwaitingReset = true;
+            }}
+          }} else if (postThirtyDownAwaitingReset) {{
+            const portfolioValue = tqqqValue + aggValue;
+            tqqqValue = portfolioValue * 0.60;
+            aggValue = portfolioValue * 0.40;
+            signalTarget = tqqqValue;
+            postThirtyDownAwaitingReset = false;
+            actionType = 'reset_60_40';
+            actionSummary = 'Reset the independent plan to 60/40 after 30 Down.';
+          }} else {{
+            tqqqValue -= surplus;
+            aggValue += surplus;
+            actionType = 'sell_tqqq';
+            actionSummary = 'Sold ' + fmtUsdFull(surplus) + ' TQQQ above the signal target.';
+          }}
+        }}
+
+        rows.push(buildNineSigSimulationRow(
+          priceRow, signalTarget, tqqqValue, aggValue,
+          actionType, actionSummary,
+          thirtyDownActive, skippedSellSignals, previousPortfolioValue,
+        ));
+        previousPortfolioValue = rows[rows.length - 1].portfolioValue;
+      }}
+      return rows;
+    }}
+
+    function renderNineSigHistoryKpis(rows, mode) {{
       const host = document.getElementById('ninesig-history-kpis');
       if (!host) return;
       if (!rows.length) {{
@@ -1665,19 +1865,6 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
 
       const first = rows[0];
       const latest = rows[rows.length - 1];
-      const years = yearsBetween(first.date, latest.date);
-      const cagr = years > 0
-        ? Math.pow(latest.scenario_portfolio_value / first.scenario_portfolio_value, 1 / years) - 1
-        : null;
-      const qoqRows = rows.filter(function(r) {{
-        return r.scenario_qoq_change !== null && r.scenario_qoq_change !== undefined;
-      }});
-      const best = qoqRows.length
-        ? qoqRows.reduce(function(a, b) {{ return b.scenario_qoq_change > a.scenario_qoq_change ? b : a; }})
-        : null;
-      const worst = qoqRows.length
-        ? qoqRows.reduce(function(a, b) {{ return b.scenario_qoq_change < a.scenario_qoq_change ? b : a; }})
-        : null;
 
       function card(label, value, hint, cls) {{
         return `<div class="ninesig-history-kpi">
@@ -1687,20 +1874,104 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         </div>`;
       }}
 
+      if (mode === 'simulation') {{
+        const years = yearsBetween(first.rebalanceDate, latest.rebalanceDate);
+        const cagr = years > 0
+          ? Math.pow(latest.portfolioValue / first.portfolioValue, 1 / years) - 1
+          : null;
+        const dd = maxNineSigDrawdown(rows);
+        const state = latest.thirtyDownActive
+          ? 'Active (' + latest.skippedSellSignals + '/2 sells skipped)'
+          : 'Inactive';
+        host.innerHTML = [
+          card('Latest portfolio value', fmtUsdFull(latest.portfolioValue), latest.quarter + ' · ' + fmtIsoDate(latest.rebalanceDate)),
+          card('CAGR', fmtQoq(cagr), first.quarter + ' → ' + latest.quarter, cagr != null && cagr >= 0 ? 'pos' : 'neg'),
+          card('Max drawdown', fmtQoq(dd), 'Peak-to-trough portfolio value', 'neg'),
+          card('Current allocation', fmtAlloc(latest.tqqqAllocation) + ' / ' + fmtAlloc(latest.aggAllocation), 'TQQQ / AGG'),
+          card('30 Down state', state, 'Sell skips reset when a fresh 30 Down triggers'),
+          card('Start', fmtUsdFull(first.portfolioValue), fmtIsoDate(first.rebalanceDate) + ' · fresh 60/40'),
+        ].join('');
+        return;
+      }}
+
+      const years = yearsBetween(first.date, latest.date);
+      const cagr = years > 0
+        ? Math.pow(latest.portfolio_value / first.portfolio_value, 1 / years) - 1
+        : null;
+      const qoqRows = rows.filter(function(r) {{
+        return r.qoq_change !== null && r.qoq_change !== undefined;
+      }});
+      const best = qoqRows.length
+        ? qoqRows.reduce(function(a, b) {{ return b.qoq_change > a.qoq_change ? b : a; }})
+        : null;
+      const worst = qoqRows.length
+        ? qoqRows.reduce(function(a, b) {{ return b.qoq_change < a.qoq_change ? b : a; }})
+        : null;
+
       host.innerHTML = [
-        card('Latest portfolio value', fmtUsdFull(latest.scenario_portfolio_value), latest.quarter + ' · ' + fmtIsoDate(latest.date)),
+        card('Latest portfolio value', fmtUsdFull(latest.portfolio_value), latest.quarter + ' · ' + fmtIsoDate(latest.date)),
         card('CAGR since inception', fmtQoq(cagr), first.quarter + ' → ' + latest.quarter, cagr != null && cagr >= 0 ? 'pos' : 'neg'),
-        card('Best quarter', best ? fmtQoq(best.scenario_qoq_change) : '—', best ? best.quarter : '', 'pos'),
-        card('Worst quarter', worst ? fmtQoq(worst.scenario_qoq_change) : '—', worst ? worst.quarter : '', 'neg'),
+        card('Best quarter', best ? fmtQoq(best.qoq_change) : '—', best ? best.quarter : '', 'pos'),
+        card('Worst quarter', worst ? fmtQoq(worst.qoq_change) : '—', worst ? worst.quarter : '', 'neg'),
         card('Current allocation', fmtAlloc(latest.tqqq_allocation) + ' / ' + fmtAlloc(latest.agg_allocation), 'TQQQ / AGG'),
       ].join('');
     }}
 
-    function renderNineSigHistoryTable(rows) {{
+    function setNineSigTableHead(mode) {{
+      const head = document.getElementById('ninesig-history-head');
+      if (!head) return;
+      if (mode === 'simulation') {{
+        head.innerHTML = `<tr>
+          <th>Quarter</th>
+          <th>Rebalance Date</th>
+          <th>Action</th>
+          <th class="num">TQQQ %</th>
+          <th class="num">AGG %</th>
+          <th class="num">Portfolio Value</th>
+          <th class="num">QoQ Change</th>
+          <th class="num">Signal Target</th>
+          <th>30 Down</th>
+          <th>Notes</th>
+        </tr>`;
+        return;
+      }}
+      head.innerHTML = `<tr>
+        <th>Quarter</th>
+        <th>Action Date</th>
+        <th>Action</th>
+        <th class="num">TQQQ %</th>
+        <th class="num">AGG %</th>
+        <th class="num">Portfolio Value</th>
+        <th class="num">QoQ Change</th>
+        <th>Notes</th>
+      </tr>`;
+    }}
+
+    function renderNineSigHistoryTable(rows, mode) {{
       const body = document.getElementById('ninesig-history-body');
       if (!body) return;
+      setNineSigTableHead(mode);
+      if (mode === 'simulation') {{
+        body.innerHTML = rows.map(function(row) {{
+          const qoq = row.qoqChange;
+          const qoqClass = qoq === null || qoq === undefined ? '' : (qoq >= 0 ? 'pos' : 'neg');
+          return `<tr>
+            <td><strong>${{escapeHtml(row.quarter)}}</strong></td>
+            <td>${{fmtIsoDate(row.rebalanceDate)}}</td>
+            <td><span class="ninesig-action-badge ${{nineSigActionClass(row.actionType)}}">${{escapeHtml(row.actionType.replaceAll('_', ' '))}}</span></td>
+            <td class="num">${{fmtAlloc(row.tqqqAllocation)}}</td>
+            <td class="num">${{fmtAlloc(row.aggAllocation)}}</td>
+            <td class="num">${{fmtUsdFull(row.portfolioValue)}}</td>
+            <td class="num ${{qoqClass}}">${{fmtQoq(qoq)}}</td>
+            <td class="num">${{fmtUsdFull(row.signalTarget)}}</td>
+            <td>${{row.thirtyDownActive ? 'Active' : 'Inactive'}}</td>
+            <td class="notes">${{escapeHtml(row.actionSummary)}}</td>
+          </tr>`;
+        }}).join('');
+        return;
+      }}
       body.innerHTML = rows.map(function(row) {{
-        const qoq = row.scenario_qoq_change;
+        const qoq = row.qoq_change;
         const qoqClass = qoq === null || qoq === undefined ? '' : (qoq >= 0 ? 'pos' : 'neg');
         return `<tr>
           <td><strong>${{escapeHtml(row.quarter)}}</strong></td>
@@ -1708,22 +1979,70 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           <td><span class="ninesig-action-badge ${{nineSigActionClass(row.action_type)}}">${{escapeHtml(row.action)}}</span></td>
           <td class="num">${{fmtAlloc(row.tqqq_allocation)}}</td>
           <td class="num">${{fmtAlloc(row.agg_allocation)}}</td>
-          <td class="num">${{fmtUsdFull(row.scenario_portfolio_value)}}</td>
+          <td class="num">${{fmtUsdFull(row.portfolio_value)}}</td>
           <td class="num ${{qoqClass}}">${{fmtQoq(qoq)}}</td>
           <td class="notes">${{escapeHtml(row.notes)}}</td>
         </tr>`;
       }}).join('');
     }}
 
-    function renderNineSigHistoryCharts(rows) {{
+    function setNineSigSubtitles(mode) {{
+      const valueSubtitle = document.getElementById('ninesig-value-subtitle');
+      const allocationSubtitle = document.getElementById('ninesig-allocation-subtitle');
+      const qoqSubtitle = document.getElementById('ninesig-qoq-subtitle');
+      if (mode === 'simulation') {{
+        if (valueSubtitle) valueSubtitle.textContent = 'Independent plan value using TQQQ and AGG adjusted closes.';
+        if (allocationSubtitle) allocationSubtitle.textContent = 'Post-action allocation after each simulated quarterly rebalance.';
+        if (qoqSubtitle) qoqSubtitle.textContent = 'Quarter-over-quarter simulated portfolio return.';
+        return;
+      }}
+      if (valueSubtitle) valueSubtitle.textContent = 'Published quarterly post-action portfolio value.';
+      if (allocationSubtitle) allocationSubtitle.textContent = 'Published post-action allocation at each quarterly action date.';
+      if (qoqSubtitle) qoqSubtitle.textContent = 'Published QoQ portfolio change.';
+    }}
+
+    function normalizedNineSigRows(rows, mode) {{
+      if (mode === 'simulation') {{
+        return rows.map(function(row) {{
+          return {{
+            date: row.rebalanceDate,
+            quarter: row.quarter,
+            value: row.portfolioValue,
+            tqqqAllocation: row.tqqqAllocation,
+            aggAllocation: row.aggAllocation,
+            qoq: row.qoqChange,
+          }};
+        }});
+      }}
+      return rows.map(function(row) {{
+        return {{
+          date: row.date,
+          quarter: row.quarter,
+          value: row.portfolio_value,
+          tqqqAllocation: row.tqqq_allocation,
+          aggAllocation: row.agg_allocation,
+          qoq: row.qoq_change,
+        }};
+      }});
+    }}
+
+    function clearNineSigCharts() {{
+      ['ninesig-value-chart', 'ninesig-allocation-chart', 'ninesig-qoq-chart'].forEach(function(id) {{
+        const el = document.getElementById(id);
+        if (el && window.Plotly) Plotly.purge(el);
+      }});
+    }}
+
+    function renderNineSigHistoryCharts(rows, mode) {{
       if (!rows.length) return;
+      const chartRows = normalizedNineSigRows(rows, mode);
       const chartOpts = {{ displayModeBar: false, scrollZoom: false, responsive: true, doubleClick: false }};
-      const x = rows.map(function(r) {{ return r.date; }});
-      const latest = rows[rows.length - 1];
+      const x = chartRows.map(function(r) {{ return r.date; }});
+      const latest = chartRows[chartRows.length - 1];
 
       Plotly.newPlot('ninesig-value-chart', [{{
         x: x,
-        y: rows.map(function(r) {{ return r.scenario_portfolio_value; }}),
+        y: chartRows.map(function(r) {{ return r.value; }}),
         type: 'scatter',
         mode: 'lines+markers',
         line: {{ color: COLORS.accent, width: 2.2 }},
@@ -1731,6 +2050,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         hovertemplate: '<b>%{{x}}</b><br>Value: $%{{y:,.0f}}<extra></extra>',
       }}], editorialLayout({{
         margin: {{ l: 74, r: 78, t: 8, b: 42 }},
+        showlegend: false,
         yaxis: {{
           gridcolor: COLORS.grid, gridwidth: 0.5, zeroline: false, fixedrange: true,
           showline: false, ticks: '', tickfont: {{ color: COLORS.text_light, size: 11 }},
@@ -1738,20 +2058,20 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           title: {{ text: 'Portfolio value', font: {{ size: 11, color: COLORS.text_light }} }},
         }},
         annotations: [{{
-          x: latest.date, y: latest.scenario_portfolio_value,
-          text: '<b>' + fmtMoney(latest.scenario_portfolio_value) + '</b>',
+          x: latest.date, y: latest.value,
+          text: '<b>' + fmtMoney(latest.value) + '</b>',
           showarrow: false, xanchor: 'left', yanchor: 'middle', xshift: 8,
           font: {{ size: 11, color: COLORS.accent, family: FONT_SANS }},
         }}],
         hovermode: 'x unified',
       }}), chartOpts);
 
-      const lastAggMid = latest.agg_allocation * 50;
-      const lastTqqqMid = latest.agg_allocation * 100 + latest.tqqq_allocation * 50;
+      const lastAggMid = latest.aggAllocation * 50;
+      const lastTqqqMid = latest.aggAllocation * 100 + latest.tqqqAllocation * 50;
       Plotly.newPlot('ninesig-allocation-chart', [
         {{
           x: x,
-          y: rows.map(function(r) {{ return r.agg_allocation * 100; }}),
+          y: chartRows.map(function(r) {{ return r.aggAllocation * 100; }}),
           type: 'scatter', mode: 'lines', stackgroup: 'alloc',
           line: {{ width: 0, color: COLORS.cat_5 }},
           fillcolor: COLORS.cat_5,
@@ -1760,7 +2080,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         }},
         {{
           x: x,
-          y: rows.map(function(r) {{ return r.tqqq_allocation * 100; }}),
+          y: chartRows.map(function(r) {{ return r.tqqqAllocation * 100; }}),
           type: 'scatter', mode: 'lines', stackgroup: 'alloc',
           line: {{ width: 0, color: COLORS.accent }},
           fillcolor: COLORS.accent,
@@ -1769,6 +2089,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         }},
       ], editorialLayout({{
         margin: {{ l: 58, r: 64, t: 8, b: 42 }},
+        showlegend: false,
         yaxis: {{
           gridcolor: COLORS.grid, gridwidth: 0.5, fixedrange: true,
           showline: false, ticks: '', tickfont: {{ color: COLORS.text_light, size: 11 }},
@@ -1790,21 +2111,22 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         hovermode: 'x unified',
       }}), chartOpts);
 
-      const qoqRows = rows.filter(function(r) {{
-        return r.scenario_qoq_change !== null && r.scenario_qoq_change !== undefined;
+      const qoqRows = chartRows.filter(function(r) {{
+        return r.qoq !== null && r.qoq !== undefined;
       }});
       Plotly.newPlot('ninesig-qoq-chart', [{{
         x: qoqRows.map(function(r) {{ return r.date; }}),
-        y: qoqRows.map(function(r) {{ return r.scenario_qoq_change * 100; }}),
+        y: qoqRows.map(function(r) {{ return r.qoq * 100; }}),
         type: 'bar',
         marker: {{
           color: qoqRows.map(function(r) {{
-            return r.scenario_qoq_change >= 0 ? COLORS.green : COLORS.red;
+            return r.qoq >= 0 ? COLORS.green : COLORS.red;
           }}),
         }},
         hovertemplate: '<b>%{{x}}</b><br>QoQ: %{{y:+.1f}}%<extra></extra>',
       }}], editorialLayout({{
         margin: {{ l: 56, r: 24, t: 8, b: 42 }},
+        showlegend: false,
         yaxis: {{
           gridcolor: COLORS.grid, gridwidth: 0.5, fixedrange: true,
           showline: false, ticks: '', tickfont: {{ color: COLORS.text_light, size: 11 }},
@@ -1818,44 +2140,74 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       }}), chartOpts);
     }}
 
+    function syncNineSigModeUi() {{
+      document.querySelectorAll('[data-ninesig-mode]').forEach(function(button) {{
+        button.classList.toggle('active', button.dataset.ninesigMode === ninesigMode);
+      }});
+      const simPanel = document.getElementById('ninesig-simulation-panel');
+      if (simPanel) simPanel.hidden = ninesigMode !== 'simulation';
+      const sourceNote = document.getElementById('ninesig-simulation-source-note');
+      if (sourceNote) sourceNote.hidden = ninesigMode !== 'simulation';
+      setNineSigSubtitles(ninesigMode);
+    }}
+
     function renderNineSigHistory() {{
       const section = document.getElementById('9sig-history');
-      if (!NINESIG_HISTORY.length) {{
+      const message = document.getElementById('ninesig-history-message');
+      if (!NINESIG_HISTORY.length && !NINESIG_ADJUSTED_QUARTERS.length) {{
         if (section) section.style.display = 'none';
         return;
       }}
-      const rows = nineSigScenarioRows();
-      renderNineSigHistoryKpis(rows);
-      renderNineSigHistoryCharts(rows);
-      renderNineSigHistoryTable(rows);
+      if (section) section.style.display = '';
+      syncNineSigModeUi();
+
+      const rows = ninesigMode === 'simulation' ? simulateNineSigNewPlan() : NINESIG_HISTORY;
+      if (!rows.length) {{
+        if (message) {{
+          message.hidden = false;
+          message.textContent = ninesigMode === 'simulation'
+            ? 'New Plan Simulation is unavailable because full adjusted-close data for both TQQQ and AGG is missing.'
+            : 'Published 9Sig history is unavailable.';
+        }}
+        renderNineSigHistoryKpis([], ninesigMode);
+        renderNineSigHistoryTable([], ninesigMode);
+        clearNineSigCharts();
+        return;
+      }}
+      if (message) {{
+        message.hidden = true;
+        message.textContent = '';
+      }}
+      renderNineSigHistoryKpis(rows, ninesigMode);
+      renderNineSigHistoryCharts(rows, ninesigMode);
+      renderNineSigHistoryTable(rows, ninesigMode);
     }}
 
     function wireNineSigHistoryControls() {{
-      const select = document.getElementById('ninesig-history-start-date');
-      const input = document.getElementById('ninesig-history-start-value');
-      const reset = document.getElementById('ninesig-history-reset');
-      if (!select || !input || !NINESIG_HISTORY.length) return;
-
-      select.innerHTML = NINESIG_HISTORY.map(function(row, idx) {{
-        return '<option value="' + idx + '">' + escapeHtml(row.quarter + ' · ' + fmtIsoDate(row.date)) + '</option>';
-      }}).join('');
-      input.value = Math.round(DEFAULT_NINESIG_START_VALUE);
-
-      select.addEventListener('change', function() {{
-        const idx = parseInt(select.value, 10);
-        const row = NINESIG_HISTORY[idx] || NINESIG_HISTORY[0];
-        if (!ninesigStartValueEdited) input.value = Math.round(row.portfolio_value);
-        renderNineSigHistory();
+      const dateInput = document.getElementById('ninesig-sim-start-date');
+      const valueInput = document.getElementById('ninesig-sim-start-value');
+      const reset = document.getElementById('ninesig-sim-reset');
+      document.querySelectorAll('[data-ninesig-mode]').forEach(function(button) {{
+        button.addEventListener('click', function() {{
+          ninesigMode = button.dataset.ninesigMode || 'published';
+          renderNineSigHistory();
+        }});
       }});
-      input.addEventListener('input', function() {{
-        ninesigStartValueEdited = true;
-        renderNineSigHistory();
-      }});
+
+      if (dateInput) {{
+        dateInput.min = firstAvailableNineSigStartDate();
+        dateInput.max = lastAvailableNineSigStartDate();
+        dateInput.value = defaultNineSigSimulationStartDate();
+        dateInput.addEventListener('input', renderNineSigHistory);
+      }}
+      if (valueInput) {{
+        valueInput.value = Math.round(DEFAULT_NINESIG_SIM_START_VALUE);
+        valueInput.addEventListener('input', renderNineSigHistory);
+      }}
       if (reset) {{
         reset.addEventListener('click', function() {{
-          ninesigStartValueEdited = false;
-          select.value = '0';
-          input.value = Math.round(DEFAULT_NINESIG_START_VALUE);
+          if (dateInput) dateInput.value = defaultNineSigSimulationStartDate();
+          if (valueInput) valueInput.value = Math.round(DEFAULT_NINESIG_SIM_START_VALUE);
           renderNineSigHistory();
         }});
       }}
@@ -2904,8 +3256,17 @@ def generate_html(
     signals: dict[str, FundSignals] | None = None,
     sig_lenses: dict[str, SigLens] | None = None,
     nine_sig_panel: str = "",
+    nine_sig_adjusted_data: dict[str, pd.Series] | None = None,
 ) -> str:
-    radar_json = build_radar_json(funds, metrics, fund_data, holdings, signals, sig_lenses)
+    radar_json = build_radar_json(
+        funds,
+        metrics,
+        fund_data,
+        holdings,
+        signals,
+        sig_lenses,
+        nine_sig_adjusted_data,
+    )
     colors_json = json.dumps({k: v for k, v in COLORS.items()})
 
     return HTML_TEMPLATE.format(
