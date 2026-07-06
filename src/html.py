@@ -638,13 +638,55 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       .ninesig-history-chart-wide {{ grid-column: auto; }}
     }}
     @media (max-width: 720px) {{
-      .ninesig-scenario-bar {{ grid-template-columns: 1fr; }}
+      .ninesig-mode-toggle {{
+        display: grid; grid-template-columns: 1fr 1fr; width: 100%;
+      }}
+      .ninesig-mode-toggle button {{
+        min-height: 44px; padding: 8px 6px; white-space: normal;
+      }}
+      .ninesig-scenario-bar {{
+        grid-template-columns: 1fr; padding: 10px 12px; gap: 8px;
+      }}
+      .ninesig-field input,
+      .ninesig-history-reset {{
+        min-height: 44px; font-size: 16px;
+      }}
+      .ninesig-history-reset {{ width: 100%; }}
       .ninesig-history-kpis {{ grid-template-columns: 1fr 1fr; }}
       .ninesig-history-kpi .value {{ font-size: 19px; }}
-      .ninesig-history-chart {{ min-width: 620px; }}
+      .ninesig-history-chart {{ min-width: 560px; }}
       .ninesig-history-chart-scroll {{
         overflow-x: auto; -webkit-overflow-scrolling: touch;
       }}
+    }}
+    @media (max-width: 560px) {{
+      .ninesig-history-kpis {{ grid-template-columns: 1fr; }}
+      .ninesig-history-kpi {{ padding: 12px 14px; }}
+      .ninesig-history-chart {{ min-width: 500px; height: 300px; }}
+      .ninesig-history-chart-wide .ninesig-history-chart {{ height: 320px; }}
+      .ninesig-history-table,
+      .ninesig-history-table tbody,
+      .ninesig-history-table tr,
+      .ninesig-history-table td {{ display: block; width: 100%; }}
+      .ninesig-history-table thead {{ display: none; }}
+      .ninesig-history-table tr {{
+        margin: 0 0 12px; padding: 10px 0;
+        background: {panel_bg}; border-left: 3px solid {accent};
+      }}
+      .ninesig-history-table td {{
+        display: grid; grid-template-columns: minmax(92px, 38%) 1fr;
+        gap: 8px; padding: 6px 12px; border-bottom: 0;
+        text-align: left !important; min-width: 0;
+      }}
+      .ninesig-history-table td::before {{
+        content: attr(data-label);
+        font-size: 10px; font-weight: 700; color: {text_light};
+        text-transform: uppercase; letter-spacing: .06em;
+      }}
+      .ninesig-history-table td.notes {{
+        grid-template-columns: 1fr; min-width: 0;
+      }}
+      .ninesig-action-badge {{ white-space: normal; }}
     }}
 
     /* Sticky filter bar */
@@ -1123,7 +1165,11 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         max-width: 100%; min-width: 0; overflow-wrap: break-word;
       }}
       .intro-section p, .page-header .subtitle {{ overflow-wrap: break-word; }}
-      .layout {{ flex-direction: column; gap: 0; }}
+      .layout {{
+        flex-direction: column; gap: 0; align-items: stretch;
+        width: 100%; max-width: 100%; overflow-x: clip;
+      }}
+      .main-content {{ width: 100%; max-width: 100%; min-width: 0; }}
       .sidebar {{
         position: static; width: 100%; flex: 1; max-height: none;
         overflow-y: visible; padding: 8px 0;
@@ -1956,16 +2002,16 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           const qoq = row.qoqChange;
           const qoqClass = qoq === null || qoq === undefined ? '' : (qoq >= 0 ? 'pos' : 'neg');
           return `<tr>
-            <td><strong>${{escapeHtml(row.quarter)}}</strong></td>
-            <td>${{fmtIsoDate(row.rebalanceDate)}}</td>
-            <td><span class="ninesig-action-badge ${{nineSigActionClass(row.actionType)}}">${{escapeHtml(row.actionType.replaceAll('_', ' '))}}</span></td>
-            <td class="num">${{fmtAlloc(row.tqqqAllocation)}}</td>
-            <td class="num">${{fmtAlloc(row.aggAllocation)}}</td>
-            <td class="num">${{fmtUsdFull(row.portfolioValue)}}</td>
-            <td class="num ${{qoqClass}}">${{fmtQoq(qoq)}}</td>
-            <td class="num">${{fmtUsdFull(row.signalTarget)}}</td>
-            <td>${{row.thirtyDownActive ? 'Active' : 'Inactive'}}</td>
-            <td class="notes">${{escapeHtml(row.actionSummary)}}</td>
+            <td data-label="Quarter"><strong>${{escapeHtml(row.quarter)}}</strong></td>
+            <td data-label="Rebalance Date">${{fmtIsoDate(row.rebalanceDate)}}</td>
+            <td data-label="Action"><span class="ninesig-action-badge ${{nineSigActionClass(row.actionType)}}">${{escapeHtml(row.actionType.replaceAll('_', ' '))}}</span></td>
+            <td data-label="TQQQ %" class="num">${{fmtAlloc(row.tqqqAllocation)}}</td>
+            <td data-label="AGG %" class="num">${{fmtAlloc(row.aggAllocation)}}</td>
+            <td data-label="Portfolio Value" class="num">${{fmtUsdFull(row.portfolioValue)}}</td>
+            <td data-label="QoQ Change" class="num ${{qoqClass}}">${{fmtQoq(qoq)}}</td>
+            <td data-label="Signal Target" class="num">${{fmtUsdFull(row.signalTarget)}}</td>
+            <td data-label="30 Down">${{row.thirtyDownActive ? 'Active' : 'Inactive'}}</td>
+            <td data-label="Notes" class="notes">${{escapeHtml(row.actionSummary)}}</td>
           </tr>`;
         }}).join('');
         return;
@@ -1974,14 +2020,14 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         const qoq = row.qoq_change;
         const qoqClass = qoq === null || qoq === undefined ? '' : (qoq >= 0 ? 'pos' : 'neg');
         return `<tr>
-          <td><strong>${{escapeHtml(row.quarter)}}</strong></td>
-          <td>${{fmtIsoDate(row.date)}}</td>
-          <td><span class="ninesig-action-badge ${{nineSigActionClass(row.action_type)}}">${{escapeHtml(row.action)}}</span></td>
-          <td class="num">${{fmtAlloc(row.tqqq_allocation)}}</td>
-          <td class="num">${{fmtAlloc(row.agg_allocation)}}</td>
-          <td class="num">${{fmtUsdFull(row.portfolio_value)}}</td>
-          <td class="num ${{qoqClass}}">${{fmtQoq(qoq)}}</td>
-          <td class="notes">${{escapeHtml(row.notes)}}</td>
+          <td data-label="Quarter"><strong>${{escapeHtml(row.quarter)}}</strong></td>
+          <td data-label="Action Date">${{fmtIsoDate(row.date)}}</td>
+          <td data-label="Action"><span class="ninesig-action-badge ${{nineSigActionClass(row.action_type)}}">${{escapeHtml(row.action)}}</span></td>
+          <td data-label="TQQQ %" class="num">${{fmtAlloc(row.tqqq_allocation)}}</td>
+          <td data-label="AGG %" class="num">${{fmtAlloc(row.agg_allocation)}}</td>
+          <td data-label="Portfolio Value" class="num">${{fmtUsdFull(row.portfolio_value)}}</td>
+          <td data-label="QoQ Change" class="num ${{qoqClass}}">${{fmtQoq(qoq)}}</td>
+          <td data-label="Notes" class="notes">${{escapeHtml(row.notes)}}</td>
         </tr>`;
       }}).join('');
     }}

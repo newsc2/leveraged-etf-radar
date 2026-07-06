@@ -1,6 +1,8 @@
 """Tests for independent 9Sig new-plan simulation."""
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 import pytest
 
@@ -27,12 +29,23 @@ def test_builds_quarterly_adjusted_close_rows_on_shared_dates() -> None:
     tqqq = pd.Series([10.0, 11.0, 12.0, 13.0], index=idx)
     agg = pd.Series([100.0, 101.0, 102.0, 103.0], index=idx)
 
-    rows = build_ninesig_adjusted_quarters(tqqq, agg)
+    rows = build_ninesig_adjusted_quarters(tqqq, agg, as_of=date(2024, 7, 1))
 
     assert [row.quarter for row in rows] == ["2024 Q1", "2024 Q2"]
     assert rows[0].date == "2024-03-29"
     assert rows[0].tqqq_adjusted_close == pytest.approx(11.0)
     assert rows[0].agg_adjusted_close == pytest.approx(101.0)
+
+
+def test_excludes_incomplete_current_quarter() -> None:
+    idx = pd.to_datetime(["2026-03-31", "2026-06-30", "2026-07-02"])
+    tqqq = pd.Series([41.68, 81.0, 73.35], index=idx)
+    agg = pd.Series([98.27, 98.65, 98.61], index=idx)
+
+    rows = build_ninesig_adjusted_quarters(tqqq, agg, as_of=date(2026, 7, 6))
+
+    assert [row.quarter for row in rows] == ["2026 Q1", "2026 Q2"]
+    assert rows[-1].date == "2026-06-30"
 
 
 def test_new_plan_starts_fresh_at_60_40_for_recent_start_years() -> None:

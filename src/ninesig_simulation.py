@@ -55,8 +55,9 @@ def _quarter_label(timestamp: pd.Timestamp) -> str:
 def build_ninesig_adjusted_quarters(
     tqqq_adjusted: pd.Series | None,
     agg_adjusted: pd.Series | None,
+    as_of: date | None = None,
 ) -> list[NineSigAdjustedQuarter]:
-    """Return quarter-end adjusted closes for TQQQ and AGG on shared dates."""
+    """Return completed-quarter adjusted closes for TQQQ and AGG on shared dates."""
     if tqqq_adjusted is None or agg_adjusted is None or tqqq_adjusted.empty or agg_adjusted.empty:
         return []
 
@@ -72,6 +73,12 @@ def build_ninesig_adjusted_quarters(
     quarter_index = pd.DatetimeIndex(joined.index).to_period("Q")
     joined["period"] = quarter_index
     quarterly = joined.groupby("period", sort=True).tail(1)
+    as_of_date = as_of or date.today()
+    complete_quarter_mask = [
+        isinstance(period, pd.Period) and period.end_time.date() <= as_of_date
+        for period in quarterly["period"]
+    ]
+    quarterly = quarterly.loc[complete_quarter_mask]
 
     rows: list[NineSigAdjustedQuarter] = []
     for ts in pd.DatetimeIndex(quarterly.index):
