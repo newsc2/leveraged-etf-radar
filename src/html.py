@@ -2197,9 +2197,12 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       const qoqRows = chartRows.filter(function(r) {{
         return r.qoq !== null && r.qoq !== undefined;
       }});
+      const qoqPct = qoqRows.map(function(r) {{
+        return Math.round(r.qoq * 1000) / 10;
+      }});
       Plotly.newPlot('ninesig-qoq-chart', [{{
         x: qoqRows.map(function(r) {{ return r.date; }}),
-        y: qoqRows.map(function(r) {{ return r.qoq * 100; }}),
+        y: qoqPct,
         type: 'bar',
         marker: {{
           color: qoqRows.map(function(r) {{

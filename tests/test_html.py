@@ -190,6 +190,7 @@ class TestGenerateHtml:
         assert 'id="ninesig-sim-start-date"' not in html
         assert "Start fresh at 60/40." in html
         assert "Ending portfolio value" in html
+        assert "Math.round(r.qoq * 1000) / 10" in html
         assert "rebasing the published" not in html
         assert '"nine_sig_adjusted_quarters"' in html
 
