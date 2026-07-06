@@ -108,3 +108,23 @@ def test_thirty_down_skips_two_sell_signals_then_resets_to_60_40() -> None:
     ]
     assert rows[-1].tqqqAllocation == pytest.approx(0.60)
     assert rows[-1].aggAllocation == pytest.approx(0.40)
+
+
+def test_limited_buy_resets_target_and_does_not_retrigger_active_thirty_down() -> None:
+    quarters = [
+        _quarter("2024-03-29", 100.0),
+        _quarter("2024-06-28", 10.0),
+        _quarter("2024-09-30", 20.0),
+        _quarter("2024-12-31", 22.0),
+        _quarter("2025-03-31", 80.0),
+    ]
+
+    rows = simulate_ninesig_new_plan(quarters, "2024-01-01", 1_000)
+
+    assert rows[1].actionType == "buy_tqqq_limited"
+    assert rows[1].signalTarget == pytest.approx(rows[1].tqqqValue)
+    assert rows[2].actionType == "skip_sell_30_down"
+    assert rows[2].skippedSellSignals == 1
+    assert rows[3].actionType == "skip_sell_30_down"
+    assert rows[3].skippedSellSignals == 2
+    assert rows[4].actionType == "reset_60_40"

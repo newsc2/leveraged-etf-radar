@@ -163,12 +163,7 @@ def _row_from_state(
 
 
 def _prior_two_year_high(quarters: list[NineSigAdjustedQuarter], idx: int) -> float | None:
-    current = _parse_iso_date(quarters[idx].date)
-    candidates = [
-        q.tqqq_adjusted_close
-        for q in quarters[:idx]
-        if (current - _parse_iso_date(q.date)).days <= 731
-    ]
+    candidates = [q.tqqq_adjusted_close for q in quarters[max(0, idx - 8):idx]]
     return max(candidates) if candidates else None
 
 
@@ -221,7 +216,11 @@ def simulate_ninesig_new_plan(
         signal_target *= 1.09
 
         prior_high = _prior_two_year_high(quarters, idx)
-        if prior_high is not None and quarter.tqqq_adjusted_close <= prior_high * 0.70:
+        if (
+            prior_high is not None
+            and quarter.tqqq_adjusted_close <= prior_high * 0.70
+            and not thirty_down_active
+        ):
             thirty_down_active = True
             skipped_sell_signals = 0
             post_thirty_down_awaiting_reset = False
@@ -236,8 +235,12 @@ def simulate_ninesig_new_plan(
             agg_value -= amount_to_move
             tqqq_value += amount_to_move
             if amount_to_move < shortfall:
+                signal_target = tqqq_value
                 action_type = "buy_tqqq_limited"
-                action_summary = f"Bought ${amount_to_move:,.0f} TQQQ; AGG buying-power throttle limited the buy."
+                action_summary = (
+                    f"Bought ${amount_to_move:,.0f} TQQQ; AGG buying-power throttle limited the buy, "
+                    "so the signal target was reset to actual TQQQ value."
+                )
             else:
                 action_type = "buy_tqqq"
                 action_summary = f"Bought ${amount_to_move:,.0f} TQQQ to restore the signal target."

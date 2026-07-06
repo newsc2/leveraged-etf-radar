@@ -1763,13 +1763,9 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     }}
 
     function priorTwoYearNineSigHigh(idx) {{
-      const currentMs = Date.parse(NINESIG_ADJUSTED_QUARTERS[idx].date + 'T00:00:00');
-      if (!Number.isFinite(currentMs)) return null;
-      const cutoffMs = currentMs - 731 * 86400000;
+      const start = Math.max(0, idx - 8);
       let high = null;
-      for (let i = 0; i < idx; i += 1) {{
-        const rowMs = Date.parse(NINESIG_ADJUSTED_QUARTERS[i].date + 'T00:00:00');
-        if (!Number.isFinite(rowMs) || rowMs < cutoffMs) continue;
+      for (let i = start; i < idx; i += 1) {{
         const close = NINESIG_ADJUSTED_QUARTERS[i].tqqq_adjusted_close;
         if (Number.isFinite(close)) high = high === null ? close : Math.max(high, close);
       }}
@@ -1837,7 +1833,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         signalTarget *= 1.09;
 
         const priorHigh = priorTwoYearNineSigHigh(idx);
-        if (priorHigh !== null && priceRow.tqqq_adjusted_close <= priorHigh * 0.70) {{
+        if (priorHigh !== null && priceRow.tqqq_adjusted_close <= priorHigh * 0.70 && !thirtyDownActive) {{
           thirtyDownActive = true;
           skippedSellSignals = 0;
           postThirtyDownAwaitingReset = false;
@@ -1854,8 +1850,9 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
           aggValue -= amountToMove;
           tqqqValue += amountToMove;
           if (amountToMove < shortfall - epsilon) {{
+            signalTarget = tqqqValue;
             actionType = 'buy_tqqq_limited';
-            actionSummary = 'Bought ' + fmtUsdFull(amountToMove) + ' TQQQ; AGG buying-power throttle limited the buy.';
+            actionSummary = 'Bought ' + fmtUsdFull(amountToMove) + ' TQQQ; AGG buying-power throttle limited the buy, so the signal target was reset to actual TQQQ value.';
           }} else {{
             actionType = 'buy_tqqq';
             actionSummary = 'Bought ' + fmtUsdFull(amountToMove) + ' TQQQ to restore the signal target.';
