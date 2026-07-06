@@ -647,6 +647,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       .ninesig-scenario-bar {{
         grid-template-columns: 1fr; padding: 10px 12px; gap: 8px;
       }}
+      .ninesig-field select,
       .ninesig-field input,
       .ninesig-history-reset {{
         min-height: 44px; font-size: 16px;
@@ -664,29 +665,12 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       .ninesig-history-kpi {{ padding: 12px 14px; }}
       .ninesig-history-chart {{ min-width: 500px; height: 300px; }}
       .ninesig-history-chart-wide .ninesig-history-chart {{ height: 320px; }}
-      .ninesig-history-table,
-      .ninesig-history-table tbody,
-      .ninesig-history-table tr,
-      .ninesig-history-table td {{ display: block; width: 100%; }}
-      .ninesig-history-table thead {{ display: none; }}
-      .ninesig-history-table tr {{
-        margin: 0 0 12px; padding: 10px 0;
-        background: {panel_bg}; border-left: 3px solid {accent};
-      }}
+      .ninesig-history-table {{ min-width: 940px; font-size: 12px; }}
+      .ninesig-history-table th,
       .ninesig-history-table td {{
-        display: grid; grid-template-columns: minmax(92px, 38%) 1fr;
-        gap: 8px; padding: 6px 12px; border-bottom: 0;
-        text-align: left !important; min-width: 0;
+        padding: 7px 8px;
       }}
-      .ninesig-history-table td::before {{
-        content: attr(data-label);
-        font-size: 10px; font-weight: 700; color: {text_light};
-        text-transform: uppercase; letter-spacing: .06em;
-      }}
-      .ninesig-history-table td.notes {{
-        grid-template-columns: 1fr; min-width: 0;
-      }}
-      .ninesig-action-badge {{ white-space: normal; }}
+      .ninesig-history-table .notes {{ min-width: 220px; }}
     }}
 
     /* Sticky filter bar */
@@ -1279,9 +1263,9 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
 
       <div class="ninesig-mode-panel" id="ninesig-simulation-panel" hidden>
         <div class="ninesig-scenario-bar" aria-label="9Sig simulation controls">
-          <label class="ninesig-field" for="ninesig-sim-start-date">
-            <span>Start Date</span>
-            <input id="ninesig-sim-start-date" type="date">
+          <label class="ninesig-field" for="ninesig-sim-start-quarter">
+            <span>Start Quarter</span>
+            <select id="ninesig-sim-start-quarter"></select>
           </label>
           <label class="ninesig-field" for="ninesig-sim-start-value">
             <span>Starting Capital</span>
@@ -1749,17 +1733,28 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       return iso;
     }}
 
+    function firstNineSigQuarterOnOrAfter(iso) {{
+      const startDate = clampNineSigStartDate(iso);
+      if (!startDate) return '';
+      const row = NINESIG_ADJUSTED_QUARTERS.find(function(quarter) {{
+        return quarter.date >= startDate;
+      }});
+      return row ? row.date : lastAvailableNineSigStartDate();
+    }}
+
     function defaultNineSigSimulationStartDate() {{
       if (NINESIG_HISTORY.length && NINESIG_HISTORY[0].date) {{
-        return clampNineSigStartDate(NINESIG_HISTORY[0].date.slice(0, 4) + '-01-01');
+        return firstNineSigQuarterOnOrAfter(NINESIG_HISTORY[0].date);
       }}
       return firstAvailableNineSigStartDate();
     }}
 
     function readNineSigSimulationInputs() {{
-      const dateInput = document.getElementById('ninesig-sim-start-date');
+      const quarterSelect = document.getElementById('ninesig-sim-start-quarter');
       const valueInput = document.getElementById('ninesig-sim-start-value');
-      const startDate = clampNineSigStartDate(dateInput ? dateInput.value : defaultNineSigSimulationStartDate());
+      const startDate = firstNineSigQuarterOnOrAfter(
+        quarterSelect ? quarterSelect.value : defaultNineSigSimulationStartDate()
+      );
       const rawValue = valueInput ? parseFloat(valueInput.value) : DEFAULT_NINESIG_SIM_START_VALUE;
       const startingCapital = Number.isFinite(rawValue) && rawValue > 0
         ? rawValue
@@ -2230,7 +2225,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     }}
 
     function wireNineSigHistoryControls() {{
-      const dateInput = document.getElementById('ninesig-sim-start-date');
+      const quarterSelect = document.getElementById('ninesig-sim-start-quarter');
       const valueInput = document.getElementById('ninesig-sim-start-value');
       const reset = document.getElementById('ninesig-sim-reset');
       document.querySelectorAll('[data-ninesig-mode]').forEach(function(button) {{
@@ -2240,11 +2235,12 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         }});
       }});
 
-      if (dateInput) {{
-        dateInput.min = firstAvailableNineSigStartDate();
-        dateInput.max = lastAvailableNineSigStartDate();
-        dateInput.value = defaultNineSigSimulationStartDate();
-        dateInput.addEventListener('input', renderNineSigHistory);
+      if (quarterSelect) {{
+        quarterSelect.innerHTML = NINESIG_ADJUSTED_QUARTERS.map(function(row) {{
+          return '<option value="' + row.date + '">' + escapeHtml(row.quarter + ' · ' + fmtIsoDate(row.date)) + '</option>';
+        }}).join('');
+        quarterSelect.value = defaultNineSigSimulationStartDate();
+        quarterSelect.addEventListener('change', renderNineSigHistory);
       }}
       if (valueInput) {{
         valueInput.value = Math.round(DEFAULT_NINESIG_SIM_START_VALUE);
@@ -2252,7 +2248,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
       }}
       if (reset) {{
         reset.addEventListener('click', function() {{
-          if (dateInput) dateInput.value = defaultNineSigSimulationStartDate();
+          if (quarterSelect) quarterSelect.value = defaultNineSigSimulationStartDate();
           if (valueInput) valueInput.value = Math.round(DEFAULT_NINESIG_SIM_START_VALUE);
           renderNineSigHistory();
         }});

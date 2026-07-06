@@ -183,6 +183,9 @@ class TestGenerateHtml:
         html = self._build([_fund("TQQQ")], {"TQQQ": _metrics("TQQQ")})
         assert "Published History" in html
         assert "New Plan Simulation" in html
+        assert "Start Quarter" in html
+        assert 'id="ninesig-sim-start-quarter"' in html
+        assert 'id="ninesig-sim-start-date"' not in html
         assert "Start fresh at 60/40." in html
         assert "rebasing the published" not in html
         assert '"nine_sig_adjusted_quarters"' in html
