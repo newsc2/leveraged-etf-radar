@@ -331,6 +331,15 @@ def build_panel_html(
         return '<div class="ninesig-panel ninesig-empty">9Sig state file missing.</div>'
 
     state_d = json.loads(STATE_FILE.read_text())
+    history = load_history()
+    latest_history_date = max(_date.fromisoformat(row["date"]) for row in history)
+    state_rebalance_date = _date.fromisoformat(state_d["last_rebalance_date"])
+    if state_rebalance_date < latest_history_date:
+        raise ValueError(
+            "9Sig current state is stale: "
+            f"last rebalance {state_rebalance_date.isoformat()} is older than "
+            f"published history {latest_history_date.isoformat()}"
+        )
     cfg = PlanConfig()
 
     # Live re-pricing (defaults to last rebalance fill if no live price)
@@ -338,7 +347,7 @@ def build_panel_html(
     agg_price = current_agg_price or 99.00
 
     state = PlanState(
-        last_rebalance_date=_date.fromisoformat(state_d["last_rebalance_date"]),
+        last_rebalance_date=state_rebalance_date,
         prior_goal=float(state_d["prior_goal"]),
         last_quarter_close_price=float(state_d["last_quarter_close_price"]),
         last_rebalance_fill_price=float(state_d["last_rebalance_fill_price"]),

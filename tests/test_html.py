@@ -1,13 +1,17 @@
 """Tests for src.html — generation, classes, filter bar, table, KPI strip, detail panel."""
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.holdings import Component, Holdings
 from src.html import _classes_for, build_filter_bar, build_screener_table, generate_html
 from src.metrics import FundMetrics
+from src.sig_plan_charts import build_panel_html
 from src.universe import Fund
 
 
@@ -215,3 +219,27 @@ class TestGenerateHtml:
 
         assert '"tqqq_adjusted_close":10.0' in html
         assert '"agg_adjusted_close":100.0' in html
+
+
+def test_9sig_panel_uses_post_june_rebalance_shares() -> None:
+    html = build_panel_html(current_tqqq_price=64.62, current_agg_price=97.37)
+
+    assert "88,123" in html
+    assert "47,123" in html
+    assert "55.4%" in html
+    assert "44.6%" in html
+
+
+def test_9sig_panel_rejects_state_older_than_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stale_state = {
+        "last_rebalance_date": "2026-04-06",
+    }
+    state_file = tmp_path / "9sig_current_state.json"
+    state_file.write_text(json.dumps(stale_state))
+    monkeypatch.setattr("src.sig_plan_charts.STATE_FILE", state_file)
+
+    with pytest.raises(ValueError, match="current state is stale"):
+        build_panel_html(current_tqqq_price=64.62, current_agg_price=97.37)

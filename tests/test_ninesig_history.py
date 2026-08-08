@@ -1,6 +1,9 @@
 """Tests for the normalized 9Sig history data contract."""
 from __future__ import annotations
 
+import json
+
+from src.config import DATA_DIR
 from src.ninesig_history import load_ninesig_history, ninesig_history_to_dicts
 
 
@@ -29,3 +32,12 @@ def test_serializes_dashboard_payload_shape() -> None:
         "qoq_change",
         "notes",
     }
+
+
+def test_current_state_covers_latest_published_rebalance() -> None:
+    history = load_ninesig_history()
+    state = json.loads(
+        (DATA_DIR / "sig_plans" / "9sig_current_state.json").read_text()
+    )
+
+    assert state["last_rebalance_date"] >= history[-1].date

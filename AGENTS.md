@@ -105,7 +105,7 @@ If a parser fails, downgrade confidence; never fabricate holdings.
 - `data/sig_plans/9sig_quarterly_history.json` — normalized 9Sig action history rows (`quarter`, `action_type`, allocations, portfolio value, QoQ change), sourced from the 9Sig History PDF.
 - `data/sig_plans/9sig_current_state.json` — latest Kelly snapshot (shares, prior_goal, last fill price, 30-Down state). Refresh weekly when Kelly's Sunday note arrives.
 
-**Dashboard panel:** A 9Sig table + KPI strip injected near the top of the dashboard (between intro-block and filter-bar). Auto-builds on every `python export_static.py` run using live TQQQ + AGG closes from Yahoo Finance. Verified against Kelly Note 19 (2026-05-10) to the dollar.
+**Dashboard panel:** A 9Sig table + KPI strip injected near the top of the dashboard (between intro-block and filter-bar). Auto-builds on every `python export_static.py` run using live TQQQ + AGG closes from Yahoo Finance. Current holdings are verified against Kelly Note 30 (2026-08-02) plus the 2026-08-06 AGG distribution reinvestment.
 
 **Known nuances** (kept the engine simple by design):
 - 30-Down threshold check fires at exactly 30.0% drawdown; Kelly tolerates the boundary (his strict `> 30%` semantics or excluding very recent quarters).
