@@ -115,6 +115,25 @@ If a parser fails, downgrade confidence; never fabricate holdings.
 **TQQQ split history** (Yahoo applies retroactively, breaks naive comparisons):
 - 3:1 on 5/24/2018, 2:1 on ~1/13/2022, **2:1 in Q4 2025** (between 9/29/25 and 1/5/26 — discovered via share count doubling).
 
+## Investment comparison
+
+`src/comparison.py`, `src/comparison.html`, and `src/comparison.js` generate the
+`#investment-comparison` section on every export. It compares $10,000 in VTSAX,
+VGT, SCHD, QQQ, VOO, VOOG, QLD, TECL, TQQQ, SPOT, AMZN, BTC-USD, and spot gold.
+The start picker goes back to 1996 (default 2021); each asset starts at its first
+available close on/after the chosen date. Overall CAGR, forward 1/3/5/10-year
+windows, and annual returns all use that effective start. Missing windows stay blank.
+
+Yahoo adjusted closes embed reinvested distributions; gold is GoldPrice.com spot
+history (LBMA fixes before 2015, Metals.dev thereafter; CC BY 4.0 attribution is
+in the panel). Gold is not GLD or gold futures. BTC calendar dates stay in UTC.
+`cache/comparison/` is separate from the scanner's shorter histories. Exclude the
+current day's incomplete quotes and use the latest date shared by all 13 assets.
+If a source fails, dated cached data may be reused; with no cache, the build fails
+before replacing the published dashboard. Never silently substitute raw closes.
+
+Additional calculation checks: `node --test tests/test_comparison.cjs`.
+
 ## Auto-refresh on Mac Mini
 The project is a public GitHub repo (`github.com/newsc2/leveraged-etf-radar`). Both MBP and Mac Mini are clones; **the wrapper `git pull`s before every build**, so a push from MBP is picked up at the next cron tick.
 

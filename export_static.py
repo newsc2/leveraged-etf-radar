@@ -20,6 +20,7 @@ import logging
 import sys
 from pathlib import Path
 
+from src.comparison import build_comparison_panel
 from src.config import DIST_DIR
 from src.data import fetch_many, fetch_yahoo_adjusted_series, fetch_yahoo_series, fetch_yahoo_volume
 from src.holdings import resolve_all
@@ -142,6 +143,7 @@ def main() -> None:
     logger.info(f"  9Sig adjusted series: {nine_sig_adjusted_ok}/2 available")
 
     logger.info("Generating HTML...")
+    comparison_panel = build_comparison_panel(use_cache=use_cache)
     html = generate_html(
         funds=funds, metrics=metrics,
         fund_data=fund_data, proxy_data=proxy_data,
@@ -149,6 +151,7 @@ def main() -> None:
         signals=signals, sig_lenses=sig_lenses,
         nine_sig_panel=nine_sig_html,
         nine_sig_adjusted_data=nine_sig_adjusted_data,
+        comparison_panel=comparison_panel,
     )
 
     out_dir = Path(args.output)

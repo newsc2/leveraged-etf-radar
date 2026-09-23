@@ -1206,6 +1206,7 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
     <aside class="sidebar">
       <div class="sidebar-label">Sections</div>
       <nav aria-label="Section navigation">
+        <a href="#investment-comparison"><span class="nav-marker">◆</span>Growth of $10k</a>
         <a href="#9sig"><span class="nav-marker">◆</span>9Sig Plan</a>
         <a href="#9sig-history"><span class="nav-marker">◆</span>9Sig History</a>
         <a href="#scan"><span class="nav-marker">▶</span>Daily Scan</a>
@@ -1244,6 +1245,8 @@ HTML_TEMPLATE: str = """<!DOCTYPE html>
         </p>
       </div>
     </div>
+
+    {comparison_panel}
 
     <div id="9sig" class="section-anchor">
       {nine_sig_panel}
@@ -3375,6 +3378,7 @@ def generate_html(
     sig_lenses: dict[str, SigLens] | None = None,
     nine_sig_panel: str = "",
     nine_sig_adjusted_data: dict[str, pd.Series] | None = None,
+    comparison_panel: str = "",
 ) -> str:
     radar_json = build_radar_json(
         funds,
@@ -3407,6 +3411,7 @@ def generate_html(
         total_funds=len(funds),
         filter_bar=build_filter_bar(len(funds)),
         nine_sig_panel=nine_sig_panel,
+        comparison_panel=comparison_panel,
         summary_html=summary_html,
         screener=build_screener_table(funds, metrics),
         radar_json=radar_json,

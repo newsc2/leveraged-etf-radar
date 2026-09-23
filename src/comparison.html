@@ -1,0 +1,54 @@
+<section class="section section-anchor" id="investment-comparison">
+  <h3 class="section-heading">Growth of $10,000</h3>
+  <p class="section-desc">Funds, stocks, Bitcoin, and spot gold from your chosen date. Each investment starts at its first available close on or after that date, with distributions reinvested.</p>
+  <div class="comparison-controls">
+    <label for="comparison-start">Start date <input type="date" id="comparison-start" min="1996-01-01"></label>
+    <span id="comparison-asof" aria-live="polite"></span>
+  </div>
+  <p id="comparison-error" role="alert" hidden></p>
+  <div id="comparison-chart" role="img" aria-label="Growth of a separate ten thousand dollar investment in each of thirteen assets, on a logarithmic dollar axis."></div>
+  <p class="comparison-note">Logarithmic dollar scale · Daily closes · Dashed lines: leveraged ETFs · Nominal USD, before taxes and transaction costs</p>
+  <h4>Returns from each effective start</h4>
+  <p class="comparison-note">1Y–10Y: cumulative return, with annualized return below. — means the window is not complete.</p>
+  <div class="comparison-scroll" role="region" aria-label="Investment returns; scroll horizontally on smaller screens" tabindex="0">
+    <table class="comparison-table" id="comparison-horizons"></table>
+  </div>
+  <p class="comparison-note">Windows end at the first available close on or after each anniversary. Actual start and end dates appear in the return cells. These are historical forward returns, not forecasts. CAGR uses actual elapsed days.</p>
+  <details class="comparison-annual" open>
+    <summary>Annual performance</summary>
+    <p class="comparison-note">* Partial year from effective start · YTD ends at the common data cutoff · — No observations</p>
+    <div class="comparison-scroll" role="region" aria-label="Annual returns; scroll horizontally on smaller screens" tabindex="0">
+      <table class="comparison-table" id="comparison-annual"></table>
+    </div>
+  </details>
+  <p class="comparison-note comparison-sources">Stocks and funds: <a href="https://finance.yahoo.com/" target="_blank" rel="noopener">Yahoo Finance</a> split- and distribution-adjusted closes. Bitcoin: Yahoo BTC-USD (history starts in 2014). Gold spot: <a href="https://goldprice.com/gold-price-history" target="_blank" rel="noopener">GoldPrice.com</a>, LBMA fixes before 2015 and Metals.dev daily closes thereafter, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; converted to investment returns. Gold excludes storage and dealer spreads. Bitcoin and gold do not pay dividends. Asset closing times differ; the cutoff is the latest completed date with a quote for every asset.</p>
+  <noscript>This comparison requires JavaScript to calculate returns and draw the chart.</noscript>
+</section>
+<style>
+#investment-comparison .comparison-controls {display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:18px 0;}
+#investment-comparison label {display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;}
+#investment-comparison input {font:inherit;padding:8px 10px;border:1px solid #bbb;border-radius:4px;background:#fff;color:#222;}
+#investment-comparison #comparison-asof,.comparison-note {font-size:12px;color:#555;line-height:1.6;}
+#investment-comparison #comparison-error {color:#a52828;font-size:13px;}
+#investment-comparison #comparison-chart {width:100%;height:580px;}
+#investment-comparison h4 {font-size:16px;margin:26px 0 8px;}
+#investment-comparison .comparison-scroll {overflow-x:auto;max-width:100%;margin:12px 0;}
+#investment-comparison .comparison-table {width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;}
+#investment-comparison .comparison-table th,#investment-comparison .comparison-table td {padding:10px 9px;border-bottom:1px solid #e8e8e8;text-align:right;white-space:nowrap;}
+#investment-comparison .comparison-table th {font-weight:600;}
+#investment-comparison .comparison-table th:first-child {position:sticky;left:0;text-align:left;background:#fff;z-index:1;}
+#investment-comparison .comparison-table td small {display:block;color:#555;font-size:11px;}
+#investment-comparison .comparison-table .positive {background:rgba(42,134,54,.08);}
+#investment-comparison .comparison-table .negative {background:rgba(204,50,50,.08);}
+#investment-comparison a {color:#0d7680;}
+#investment-comparison .comparison-annual {margin-top:28px;}
+#investment-comparison summary {font-size:16px;font-weight:600;cursor:pointer;}
+#investment-comparison .comparison-sources {margin-top:22px;}
+@media(max-width:640px){
+  #investment-comparison input {font-size:16px;min-height:44px;}
+  #investment-comparison #comparison-chart {height:560px;}
+  #investment-comparison .comparison-table th,#investment-comparison .comparison-table td {padding:10px 8px;}
+}
+</style>
+<script id="comparison-data" type="application/json">__COMPARISON_DATA__</script>
+<script>__COMPARISON_SCRIPT__</script>
